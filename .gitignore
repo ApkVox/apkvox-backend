@@ -1,0 +1,38 @@
+# System
+.DS_Store
+Thumbs.db
+
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+.venv/
+backend/__pycache__/
+nba_engine/__pycache__/
+
+# Expo
+.expo/
+mobile-app/.expo/
+mobile-app/node_modules/
+dist/
+web-build/
+
+# Editor
+.vscode/
+.idea/
+
+# Custom
+Limpiando
+Se
+
+# Include model files for deployment
+!nba_engine/models/
+!nba_engine/**/*.pt
+!nba_engine/**/*.h5
