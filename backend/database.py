@@ -7,7 +7,7 @@ Handles SQLite persistence for predictions history and win rate tracking.
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Timezone-aware date handling
 from .timezone import get_current_timestamp
@@ -97,9 +97,26 @@ def save_predictions(predictions: List[Dict[str, Any]]) -> int:
     saved_count = 0
     for pred in predictions:
         try:
-            # Extract game date from timestamp
+            # Extract game date from start_time_utc (actual game date) or fall back to timestamp
+            start_time = pred.get("start_time_utc")
             timestamp = pred.get("timestamp", get_current_timestamp())
-            game_date = timestamp.split("T")[0]  # YYYY-MM-DD
+            
+            if start_time:
+                # Use game's actual start time for date, adjusted for NBA timezone
+                # (UTC 05:00 next day is still "today" in NBA/EST)
+                # Subtract 6 hours from UTC to safe-guard "late night" games belonging to previous day
+                try:
+                    # Robust parsing for "2026-01-14T00:30:00Z" or similar
+                    clean_time = start_time.replace('T', ' ').replace('Z', '')
+                    dt = datetime.strptime(clean_time, "%Y-%m-%d %H:%M:%S")
+                    nba_date = (dt - timedelta(hours=6)).date()
+                    game_date = str(nba_date)
+                except Exception:
+                    # Fallback if parsing fails
+                    game_date = start_time.split("T")[0]
+            else:
+                # Fallback to timestamp if no start_time
+                game_date = timestamp.split("T")[0]
             
             cursor.execute("""
                 INSERT OR IGNORE INTO predictions (

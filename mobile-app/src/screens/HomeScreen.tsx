@@ -53,8 +53,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
     const [refreshing, setRefreshing] = useState(false);
 
     const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            const data = await getPredictions();
+            // Fetch directly from API with selected date
+            // Backend now handles history, audit, and future predictions per date
+            const data = await getPredictions(selectedDate);
+
             // Sort by time
             const sorted = [...data].sort((a, b) => {
                 if (!a.start_time_utc) return 1;
@@ -64,29 +68,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
             setAllPredictions(sorted);
         } catch (e) {
             console.error(e);
+            setAllPredictions([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [i18n.language]); // Add i18n.language dependency to force updates if needed
+    }, [selectedDate, i18n.language]);
 
     // useFocusEffect ensures data is refreshed every time we look at this screen
-    // This fixes the bug where data was stale after returning from details
     useFocusEffect(
         useCallback(() => {
             fetchData();
         }, [fetchData])
     );
 
-    const filteredPredictions = useMemo(() => {
-        return allPredictions.filter(p => {
-            const date = getDateKeyFromISO(p.start_time_utc);
-            if (!date) return true; // Show if no date logic
-            return date === selectedDate;
-        });
-    }, [allPredictions, selectedDate]);
+    // Trigger fetch immediately when date changes
+    useEffect(() => {
+        setAllPredictions([]); // Clear old data to prevent flickering
+        setLoading(true); // Should trigger spinner immediately
+        fetchData();
+    }, [selectedDate]);
 
-    // ... existing handleRefresh and render ...
+    // No longer need client-side filtering as API returns specific date
+    const filteredPredictions = allPredictions;
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -118,7 +122,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
             <DateStrip selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
             {/* Content */}
-            {loading && !refreshing && allPredictions.length === 0 ? (
+            {loading && !refreshing ? (
                 <View style={styles.centerContainer}>
                     <ActivityIndicator color={colors.primary} size="large" />
                 </View>

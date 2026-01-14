@@ -5,7 +5,7 @@ Exposes NBA predictions via REST API for mobile app consumption.
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Any
@@ -80,6 +80,7 @@ class PredictionResponse(BaseModel):
     status: Optional[str] = "SCHEDULED"
     home_score: Optional[int] = None
     away_score: Optional[int] = None
+    is_correct: Optional[int] = None
 
 
 class PredictionsListResponse(BaseModel):
@@ -143,29 +144,85 @@ async def health_check():
 
 
 @app.get("/api/predictions", response_model=PredictionsListResponse, tags=["Predictions"])
-async def get_predictions(sportsbook: Optional[str] = "fanduel"):
+async def get_predictions(
+    sportsbook: str = Query("fanduel", description="Sportsbook to fetch odds from"),
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format to fetch past/future games")
+):
     """
-    Get predictions for today's NBA games.
-
-    Args:
-        sportsbook: Sportsbook to fetch odds from (fanduel, draftkings, betmgm, etc.)
-
-    Returns:
-        List of predictions for today's games with win probabilities and O/U predictions.
-        Returns empty list if no games today or data unavailable.
+    Get predictions for a specific date. If no date is provided, defaults to today.
     """
     try:
         service = get_prediction_service(sportsbook=sportsbook)
-        predictions = service.get_todays_predictions()
+        
+        target_predictions = []
+        
+        if date:
+            try:
+                # Parse date string
+                target_dt = datetime.strptime(date, "%Y-%m-%d")
+                target_date = target_dt.date()
+                today = get_current_date() # From timezone module
+                
+                # Check if date is in the past
+                if target_date < today:
+                    from .database import get_history
+                    from .audit import audit_predictions
+                    
+                    # 1. Check if we have predictions in DB
+                    existing = get_history(limit=1, game_date=date)
+                    
+                    if not existing:
+                        # AUTO-BACKFILL: Generate predictions retroactively
+                        print(f"[API] No predictions found for past date {date}. Generating retroactive predictions...")
+                        # This generates AND SAVES to DB
+                        service.get_upcoming_predictions(target_date=target_dt)
+                    
+                    # 2. Trigger Audit (Updates scores/winners)
+                    audit_stats = audit_predictions(target_dt)
+                    print(f"[API] Audit Triggered for {date}: {audit_stats}")
+                    
+                    # 3. Fetch Final Result
+                    history_records = get_history(limit=100, game_date=date)
+                    
+                    # Convert HistoryRecord dicts to PredictionResponse objects
+                    for rec in history_records:
+                        # Map field names from DB schema to API schema
+                        rec["timestamp"] = rec.get("created_at", "") or ""
+                        rec["start_time_utc"] = (rec.get("game_date") or "") + "T00:00:00Z"
+                        rec["winner_confidence"] = rec.get("confidence", 0) or 0
+                        rec["home_win_probability"] = rec.get("home_win_probability", 0) or 0
+                        rec["away_win_probability"] = rec.get("away_win_probability", 0) or 0
+                        rec["ou_confidence"] = rec.get("ou_confidence", 0) or 0
+                        rec["under_over_line"] = rec.get("under_over_line", 0) or 0
+                        rec["under_over_prediction"] = rec.get("under_over_prediction", "N/A") or "N/A"
+                        target_predictions.append(rec)
+                        
+                else:
+                    # Future/Today: Use Predictor Service
+                    # Now supports target_date!
+                    target_predictions = service.get_upcoming_predictions(target_date=target_dt)
+                    
+            except ValueError:
+                 return JSONResponse(
+                    status_code=400,
+                    content={"message": "Invalid date format. Use YYYY-MM-DD"}
+                )
+        else:
+            # Default: Today's predictions (or Next 3 Days if preferred? User asked for Today default?)
+            # Existing code was get_todays_predictions(), likely Next 3 days wrapper.
+            # We'll stick to 3 days to maintain existing functionality for "All Upcoming"
+            target_predictions = service.get_upcoming_predictions(days=3)
 
         return PredictionsListResponse(
-            count=len(predictions),
-            predictions=[PredictionResponse(**p) for p in predictions],
+            count=len(target_predictions),
+            predictions=[PredictionResponse(**p) for p in target_predictions],
             generated_at=get_current_timestamp()
         )
     except Exception as e:
         # Return empty list on error instead of failing
+        import traceback
         print(f"[API] Error getting predictions: {e}")
+        traceback.print_exc()
         return PredictionsListResponse(
             count=0,
             predictions=[],

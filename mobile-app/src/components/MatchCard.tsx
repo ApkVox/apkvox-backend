@@ -64,7 +64,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({ prediction, onPress }) => 
             : prediction.away_team
     );
 
-    const isPredictionCorrect = isFinal ? actualWinner === prediction.predicted_winner : null;
+    // Use backend 'is_correct' field if available (Source of Truth)
+    // Otherwise fallback to local calculation
+    const isPredictionCorrect = prediction.is_correct !== undefined && prediction.is_correct !== null
+        ? prediction.is_correct === 1
+        : (isFinal ? actualWinner === prediction.predicted_winner : null);
 
     return (
         <TouchableOpacity

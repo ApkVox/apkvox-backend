@@ -114,7 +114,7 @@ class ApiService {
     constructor() {
         this.client = axios.create({
             baseURL: getBaseUrl(),
-            timeout: 15000,
+            timeout: 60000, // Increased to 60s for slow Backfill operations
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -142,10 +142,9 @@ class ApiService {
     }
 
     /**
-     * Get predictions for today's games
-     * Falls back to mock data if API returns empty or fails
+     * Get predictions for a specific date (or today/upcoming if null)
      */
-    async getPredictions(sportsbook: string = 'fanduel'): Promise<Prediction[]> {
+    async getPredictions(date?: string | null, sportsbook: string = 'fanduel'): Promise<Prediction[]> {
         // If mock mode is explicitly enabled, return mock data
         if (this.useMock) {
             console.log('[API] Mock mode enabled, returning mock data');
@@ -153,10 +152,13 @@ class ApiService {
         }
 
         try {
-            console.log('[API] Fetching from:', this.client.defaults.baseURL);
+            console.log('[API] Fetching from:', this.client.defaults.baseURL, 'Date:', date);
+            const params: any = { sportsbook };
+            if (date) params.date = date;
+
             const response = await this.client.get<PredictionsResponse>(
                 '/api/predictions',
-                { params: { sportsbook } }
+                { params }
             );
 
             console.log('[API] Response status:', response.status);
@@ -185,7 +187,7 @@ const apiService = new ApiService();
 
 // Export functions
 export const checkHealth = () => apiService.checkHealth();
-export const getPredictions = (sportsbook?: string) => apiService.getPredictions(sportsbook);
+export const getPredictions = (date?: string | null, sportsbook?: string) => apiService.getPredictions(date, sportsbook);
 export const setMockMode = (enabled: boolean) => apiService.setMockMode(enabled);
 
 export default apiService;

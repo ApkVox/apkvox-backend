@@ -21,6 +21,7 @@ export interface Prediction {
     home_score?: number;
     away_score?: number;
     actual_winner?: string; // For AIAudit
+    is_correct?: number;    // 1=Correct, 0=Incorrect
     stadium?: string;       // Stadium / Location
 }
 

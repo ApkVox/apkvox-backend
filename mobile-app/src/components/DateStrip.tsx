@@ -29,12 +29,12 @@ function formatDateKey(date: Date): string {
 export const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => {
     const { t, i18n } = useTranslation();
 
-    // Generate dates
+    // Generate dates (10 days total: 7 past, Today, 2 future)
     const dates = useMemo(() => {
         const today = new Date();
         const result = [];
 
-        for (let i = 0; i < 7; i++) {
+        for (let i = -7; i <= 2; i++) {
             const date = new Date(today);
             date.setDate(date.getDate() + i);
 
@@ -43,12 +43,11 @@ export const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate
 
             let dayName = '';
             if (i === 0) {
-                dayName = t('today');
+                dayName = t('today'); // "HOY"
             } else if (i === 1) {
-                dayName = t('tomorrow'); // "MAÑANA" / "TOMORROW" - Might need styling check
-                // Re-override for Spanish "Mañana" -> "MAÑ" to fit?
-                if (i18n.language === 'es') dayName = 'MAÑ';
-                if (i18n.language === 'en') dayName = 'TMW';
+                dayName = i18n.language === 'es' ? 'MAÑ' : 'TMW';
+            } else if (i === -1) {
+                dayName = i18n.language === 'es' ? 'AYER' : 'YDA';
             } else {
                 // Get 3 letter day name
                 try {

@@ -168,38 +168,28 @@ class NBAPredictionService:
 
     def _get_games_from_schedule(self, today: datetime) -> List[List[str]]:
         """
-        Fallback: Get today's games from schedule CSV when odds scraper fails.
-        Returns list of [home_team, away_team] pairs.
+        Get games from schedule CSV for a specific target date.
+        Returns list of [home_team, away_team, location] triples.
         
         The CSV has dates in UTC. NBA games typically start 7pm-10pm EST.
         7pm EST = 00:00 UTC next day
         10pm EST = 03:00 UTC next day
         
-        So for "today's games" in EST, we need to look at:
-        - Games on "tomorrow" in UTC (00:00-05:00 UTC = 7pm-midnight EST today)
+        To capture all games for an "NBA day" (which spans two UTC calendar days),
+        we check BOTH the target date AND the next day in UTC.
         """
         try:
             schedule_df = self._load_schedule()
             
-            # Get today's date in EST/NBA timezone
-            today_date = today.date()
-            
-            # NBA games "today" in EST are typically scheduled as "tomorrow" in UTC
-            # because 7pm EST = 00:00 UTC next day
-            # So we look for games dated as tomorrow in UTC
-            tomorrow_utc = today_date + timedelta(days=1)
-            
-            # Primary: Look for games on "tomorrow" UTC (which are tonight's games in EST)
+            # Get target date
+            target_date = today.date()
+            # Strict Filtering: Adjust UTC schedule to NBA time (approx -6h offset)
+            # This prevents overlap between days and properly aligns games to their local "NBA Day"
+            # Vectorized operation for efficiency
+            nba_time = schedule_df["Date"] - timedelta(hours=6)
             todays_games = schedule_df[
-                schedule_df["Date"].dt.date == tomorrow_utc
+                nba_time.dt.date == target_date
             ]
-            
-            # Also include any late afternoon games that might be on "today" UTC
-            # (games before 7pm EST would still be on "today" UTC)
-            if todays_games.empty:
-                todays_games = schedule_df[
-                    schedule_df["Date"].dt.date == today_date
-                ]
             
             games = []
             for _, row in todays_games.iterrows():
@@ -210,7 +200,7 @@ class NBAPredictionService:
                 if home_team in team_index_current and away_team in team_index_current:
                     games.append([home_team, away_team, location])
             
-            print(f"[NBAPredictionService] Found {len(games)} games from schedule for {today_date}")
+            print(f"[NBAPredictionService] Found {len(games)} games from schedule for {target_date}")
             return games
             
         except Exception as e:
@@ -447,12 +437,13 @@ class NBAPredictionService:
         """
         return self.get_upcoming_predictions(days=3)
 
-    def get_upcoming_predictions(self, days: int = 3) -> List[Dict[str, Any]]:
+    def get_upcoming_predictions(self, days: int = 3, target_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """
-        Get predictions for the next N days.
+        Get predictions for the next N days OR a specific target date.
         
         Args:
             days: Number of days to predict (default 3)
+            target_date: Specific date to predict for (overrides days)
             
         Returns:
             List of prediction dictionaries, sorted by start time.
@@ -483,15 +474,21 @@ class NBAPredictionService:
             
             # Generate predictions for each date
             all_predictions = []
-            today = get_current_datetime()
             
-            for day_offset in range(days):
-                target_date = today + timedelta(days=day_offset)
+            dates_to_process = []
+            if target_date:
+                dates_to_process.append(target_date)
+            else:
+                today = get_current_datetime()
+                for day_offset in range(days):
+                    dates_to_process.append(today + timedelta(days=day_offset))
+            
+            for current_date in dates_to_process:
                 day_predictions = self._predict_for_date(
-                    target_date, df, schedule_df, odds
+                    current_date, df, schedule_df, odds
                 )
                 all_predictions.extend(day_predictions)
-                print(f"[NBAPredictionService] Found {len(day_predictions)} games for {target_date.date()}")
+                print(f"[NBAPredictionService] Found {len(day_predictions)} games for {current_date.date()}")
             
             # Sort by start time (earliest first)
             all_predictions.sort(
