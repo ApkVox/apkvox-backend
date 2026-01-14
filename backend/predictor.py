@@ -314,6 +314,9 @@ class NBAPredictionService:
                     if not game_row.empty:
                         if not start_time:
                             start_time = game_row.iloc[0]["Date"].isoformat()
+                            # Ensure UTC format so frontend converts to local time correctly
+                            if start_time and not start_time.endswith('Z') and '+' not in start_time:
+                                start_time += 'Z'
                         if not location:
                             location = game_row.iloc[0].get("Location", "")
                 except Exception:
