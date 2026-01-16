@@ -5,7 +5,7 @@ Exposes NBA predictions via REST API for mobile app consumption.
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Any
@@ -343,3 +343,48 @@ async def set_debug_result(request: DebugResultRequest):
         return {"status": "success", "message": "Game result updated"}
     else:
         raise HTTPException(status_code=404, detail="Prediction not found")
+
+
+# ============================================================
+# AI Analysis Endpoints (On-Demand)
+# ============================================================
+
+class AnalyzeResponse(BaseModel):
+    status: str
+    team: str
+    message: str
+
+
+@app.post("/api/analyze/{team_name}", response_model=AnalyzeResponse, tags=["AI Analysis"])
+async def analyze_team(team_name: str, background_tasks: BackgroundTasks):
+    """
+    Trigger AI analysis for a specific team.
+    Analysis runs in background - results cached in database.
+    Call /api/predictions after a few seconds to see updated ai_impact.
+    """
+    from .ai_worker import run_single_analysis
+    
+    # Run analysis in background (non-blocking)
+    background_tasks.add_task(run_single_analysis, team_name)
+    
+    return AnalyzeResponse(
+        status="analyzing",
+        team=team_name,
+        message=f"Analysis started for {team_name}. Check predictions in ~5 seconds."
+    )
+
+
+@app.post("/api/analyze/all", tags=["AI Analysis"])
+async def analyze_all_teams(background_tasks: BackgroundTasks):
+    """
+    Trigger AI analysis for all teams playing today.
+    This is the same as running: python -m backend.ai_worker
+    """
+    from .ai_worker import run_daily_analysis
+    
+    background_tasks.add_task(run_daily_analysis)
+    
+    return {
+        "status": "analyzing",
+        "message": "Daily analysis started for all teams. Check predictions in ~30-60 seconds."
+    }

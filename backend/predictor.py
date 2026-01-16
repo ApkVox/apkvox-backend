@@ -625,40 +625,41 @@ class NBAPredictionService:
             winner = int(np.argmax(ml_predictions[idx]))
             under_over = int(np.argmax(ou_predictions[idx]))
             
-            # --- AI INVESTIGATION LAYER ---
-            ai_data = {"summary": "Disabled", "impact_score": 0.0, "key_factors": []}
-            if self.investigator:
-                try:
-                    # Analyze both teams
-                    # We focus on the Favorite primarily or both if close
-                    # For simplicity, analyze both and sum impact (Home Impact - Away Impact)
+            # --- AI INVESTIGATION LAYER (CACHE-BASED) ---
+            # Read pre-computed insights from database cache (instant)
+            # Background worker (ai_worker.py) populates this cache
+            from .database import get_ai_insight
+            
+            ai_data = {"summary": "Análisis pendiente", "impact_score": 0.0, "key_factors": [], "confidence": 0}
+            game_date = str(target_date.date())
+            
+            try:
+                # Get cached insights for both teams
+                h_insight = get_ai_insight(home_team, game_date)
+                a_insight = get_ai_insight(away_team, game_date)
+                
+                if h_insight or a_insight:
+                    h_score = h_insight.get("impact_score", 0) if h_insight else 0
+                    a_score = a_insight.get("impact_score", 0) if a_insight else 0
+                    net_impact = h_score - a_score
                     
-                    # Home Team
-                    print(f"  [AI] Investigating {home_team}...")
-                    h_news = self.investigator.search_news(f"{home_team} injuries news")
-                    h_analysis = self.investigator.analyze_impact(h_news, home_team)
+                    h_summary = h_insight.get("summary", "Sin datos") if h_insight else "Sin datos"
+                    a_summary = a_insight.get("summary", "Sin datos") if a_insight else "Sin datos"
                     
-                    # Away Team
-                    print(f"  [AI] Investigating {away_team}...")
-                    a_news = self.investigator.search_news(f"{away_team} injuries news")
-                    a_analysis = self.investigator.analyze_impact(a_news, away_team)
+                    h_factors = h_insight.get("key_factors", []) if h_insight else []
+                    a_factors = a_insight.get("key_factors", []) if a_insight else []
                     
-                    # Calculate Net Impact (Negative means bad for home team, good for away)
-                    # Impact Score is -10 to +10. 
-                    # If Home has -5 impact (injury), and Away has 0, Net is -5.
-                    net_impact = h_analysis.get('impact_score', 0) - a_analysis.get('impact_score', 0)
+                    h_conf = h_insight.get("confidence", 0) if h_insight else 0
+                    a_conf = a_insight.get("confidence", 0) if a_insight else 0
                     
                     ai_data = {
-                        "summary": f"Home: {h_analysis.get('summary')} | Away: {a_analysis.get('summary')}",
+                        "summary": f"Home: {h_summary} | Away: {a_summary}",
                         "impact_score": net_impact,
-                        "key_factors": h_analysis.get('key_factors', []) + a_analysis.get('key_factors', [])
+                        "key_factors": h_factors + a_factors,
+                        "confidence": (h_conf + a_conf) / 2 if (h_conf or a_conf) else 0
                     }
-                    # Aggregate confidence
-                    ai_data["confidence"] = (h_analysis.get('confidence', 0.8) + a_analysis.get('confidence', 0.8)) / 2
-                    print(f"  [AI] Net Impact Score: {net_impact} (Conf: {ai_data['confidence']:.2f})")
-                    
-                except Exception as e:
-                    print(f"  [AI Error] {e}")
+            except Exception as e:
+                print(f"  [AI Cache] Error reading cache: {e}")
 
             pred_dict = {
                 "home_team": home_team,

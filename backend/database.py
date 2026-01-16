@@ -78,9 +78,30 @@ def init_db():
             cursor.execute("ALTER TABLE predictions ADD COLUMN away_score INTEGER DEFAULT NULL")
         except: pass
     
+    # AI Insights cache table for background-processed AI analysis
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_insights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_name TEXT NOT NULL,
+            game_date TEXT NOT NULL,
+            summary TEXT,
+            impact_score REAL DEFAULT 0.0,
+            key_factors TEXT,
+            confidence INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            UNIQUE(team_name, game_date)
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ai_insights_team_date 
+        ON ai_insights(team_name, game_date)
+    """)
+    
     conn.commit()
     conn.close()
-    print("[Database] Initialized predictions table")
+    print("[Database] Initialized predictions and ai_insights tables")
 
 
 def save_predictions(predictions: List[Dict[str, Any]]) -> int:
@@ -271,3 +292,137 @@ def get_stats() -> Dict[str, Any]:
         "win_rate": round(win_rate, 2),
         "pending_games": total - completed
     }
+
+
+# ============================================================
+# AI Insights Cache Functions
+# ============================================================
+
+def save_ai_insight(team_name: str, game_date: str, insight: Dict[str, Any]) -> bool:
+    """
+    Save AI analysis result to cache with 6-hour expiration.
+    Uses INSERT OR REPLACE to update existing entries.
+    """
+    import json
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        now = datetime.now()
+        expires = now + timedelta(hours=6)
+        
+        # Convert key_factors list to JSON string
+        key_factors_json = json.dumps(insight.get("key_factors", []))
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO ai_insights (
+                team_name, game_date, summary, impact_score, 
+                key_factors, confidence, created_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            team_name,
+            game_date,
+            insight.get("summary", ""),
+            insight.get("impact_score", 0.0),
+            key_factors_json,
+            insight.get("confidence", 0),
+            now.isoformat(),
+            expires.isoformat()
+        ))
+        
+        conn.commit()
+        conn.close()
+        print(f"[Database] Saved AI insight for {team_name} on {game_date}")
+        return True
+        
+    except Exception as e:
+        print(f"[Database] Error saving AI insight: {e}")
+        conn.close()
+        return False
+
+
+def get_ai_insight(team_name: str, game_date: str) -> Optional[Dict[str, Any]]:
+    """
+    Get cached AI insight for a team on a specific date.
+    Returns None if not found or expired.
+    """
+    import json
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT summary, impact_score, key_factors, confidence, expires_at
+            FROM ai_insights
+            WHERE team_name = ? AND game_date = ?
+        """, (team_name, game_date))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        # Check expiration
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if datetime.now() > expires_at:
+            return None  # Expired
+        
+        # Parse key_factors from JSON
+        key_factors = json.loads(row["key_factors"]) if row["key_factors"] else []
+        
+        return {
+            "summary": row["summary"],
+            "impact_score": row["impact_score"],
+            "key_factors": key_factors,
+            "confidence": row["confidence"]
+        }
+        
+    except Exception as e:
+        print(f"[Database] Error getting AI insight: {e}")
+        conn.close()
+        return None
+
+
+def get_insights_for_date(game_date: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Get all cached AI insights for a specific game date.
+    Returns dict keyed by team_name.
+    """
+    import json
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT team_name, summary, impact_score, key_factors, confidence, expires_at
+            FROM ai_insights
+            WHERE game_date = ?
+        """, (game_date,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        now = datetime.now()
+        insights = {}
+        
+        for row in rows:
+            expires_at = datetime.fromisoformat(row["expires_at"])
+            if now <= expires_at:  # Not expired
+                key_factors = json.loads(row["key_factors"]) if row["key_factors"] else []
+                insights[row["team_name"]] = {
+                    "summary": row["summary"],
+                    "impact_score": row["impact_score"],
+                    "key_factors": key_factors,
+                    "confidence": row["confidence"]
+                }
+        
+        return insights
+        
+    except Exception as e:
+        print(f"[Database] Error getting insights for date: {e}")
+        conn.close()
+        return {}
