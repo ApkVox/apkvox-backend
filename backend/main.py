@@ -63,6 +63,13 @@ class HealthResponse(BaseModel):
     timestamp: str
 
 
+class AIImpact(BaseModel):
+    summary: str
+    impact_score: float
+    key_factors: List[str]
+    confidence: float
+
+
 class PredictionResponse(BaseModel):
     home_team: str
     away_team: str
@@ -77,9 +84,13 @@ class PredictionResponse(BaseModel):
     away_odds: int
     start_time_utc: Optional[str]  # ISO 8601 format
     timestamp: str
+    recommendation: Optional[str] = "SKIP"
+    edge_percent: Optional[float] = 0.0
+    ai_impact: Optional[AIImpact] = None
     status: Optional[str] = "SCHEDULED"
     home_score: Optional[int] = None
     away_score: Optional[int] = None
+    actual_winner: Optional[str] = None
     is_correct: Optional[int] = None
 
 
@@ -107,6 +118,7 @@ class HistoryRecord(BaseModel):
     actual_winner: Optional[str]
     is_correct: Optional[int]
     created_at: str
+    ai_impact: Optional[Any] = None # For history, might be stored as JSON
     status: Optional[str] = None
     home_score: Optional[int] = None
     away_score: Optional[int] = None
@@ -146,10 +158,12 @@ async def health_check():
 @app.get("/api/predictions", response_model=PredictionsListResponse, tags=["Predictions"])
 async def get_predictions(
     sportsbook: str = Query("fanduel", description="Sportsbook to fetch odds from"),
-    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format to fetch past/future games")
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format to fetch past/future games"),
+    days: int = Query(1, description="Number of days to fetch (1-3, default 1 for speed)", ge=1, le=3)
 ):
     """
     Get predictions for a specific date. If no date is provided, defaults to today.
+    Use 'days' parameter to fetch 1-3 days of predictions (default: 1 for fast response).
     """
     try:
         service = get_prediction_service(sportsbook=sportsbook)
@@ -208,10 +222,8 @@ async def get_predictions(
                     content={"message": "Invalid date format. Use YYYY-MM-DD"}
                 )
         else:
-            # Default: Today's predictions (or Next 3 Days if preferred? User asked for Today default?)
-            # Existing code was get_todays_predictions(), likely Next 3 days wrapper.
-            # We'll stick to 3 days to maintain existing functionality for "All Upcoming"
-            target_predictions = service.get_upcoming_predictions(days=3)
+            # Default: Use the 'days' parameter (default: 1 for speed)
+            target_predictions = service.get_upcoming_predictions(days=days)
 
         return PredictionsListResponse(
             count=len(target_predictions),

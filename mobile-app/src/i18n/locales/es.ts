@@ -81,6 +81,14 @@ export default {
     share_prediction: "Compartir",
     share_message: "La IA de NotiaBet predice que",
     error: "Error",
-    share_failed: "No se pudo compartir"
+    share_failed: "No se pudo compartir",
+
+    // AI News Section
+    ai_news_title: "Investigación de Noticias (AI)",
+    ai_impact_score: "Impacto de Noticias",
+    ai_factors: "Factores Clave",
+    ai_summary: "Resumen del Reporte",
+    ai_neutral: "Neutral",
+    pending: "Pendiente"
 };
 

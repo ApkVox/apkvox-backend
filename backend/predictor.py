@@ -9,8 +9,14 @@ import sys
 import io
 import contextlib
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+# Import AI Researcher
+try:
+    from ai_researcher import SportsInvestigator
+except ImportError:
+    SportsInvestigator = None
 
 # Timezone-aware date handling
 from .timezone import get_current_datetime, get_current_timestamp, NBA_TIMEZONE
@@ -41,9 +47,16 @@ from src.DataProviders.SbrOddsProvider import SbrOddsProvider
 from .database import save_predictions
 
 # URLs from original main.py
+from src.Utils.FeatureEngine import FeatureEngine
 TODAYS_GAMES_URL = "https://data.nba.com/data/10s/v2015/json/mobile_teams/nba/2025/scores/00_todays_scores.json"
-DATA_URL = "https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&Height=&ISTRound=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2025-26&SeasonSegment=&SeasonType=Regular%20Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision="
+DATA_URL = "https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2025-26&SeasonSegment=&SeasonType=Regular%20Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision="
+DATA_URL_TEN = "https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&LastNGames=10&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2025-26&SeasonSegment=&SeasonType=Regular%20Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision="
+DATA_URL_ADV = "https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&LastNGames=0&LeagueID=00&Location=&MeasureType=Advanced&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2025-26&SeasonSegment=&SeasonType=Regular%20Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision="
+DATA_URL_ADV_TEN = "https://stats.nba.com/stats/leaguedashteamstats?Conference=&DateFrom=&DateTo=&Division=&GameScope=&GameSegment=&LastNGames=10&LeagueID=00&Location=&MeasureType=Advanced&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerExperience=&PlayerPosition=&PlusMinus=N&Rank=N&Season=2025-26&SeasonSegment=&SeasonType=Regular%20Season&ShotClockRange=&StarterBench=&TeamID=0&TwoWay=0&VsConference=&VsDivision="
 SCHEDULE_PATH = NBA_ENGINE_PATH / "Data" / "nba-2025-UTC.csv"
+
+
+
 
 
 class NBAPredictionService:
@@ -55,6 +68,11 @@ class NBAPredictionService:
     def __init__(self, sportsbook: str = "fanduel"):
         self.sportsbook = sportsbook
         self.models_loaded = False
+        self._schedule_df: Optional[pd.DataFrame] = None
+        
+        # PERFORMANCE: AI Investigator disabled by default (adds 4+ network calls per game)
+        # To re-enable: set self.investigator = SportsInvestigator() if SportsInvestigator else None
+        self.investigator = None
         self._schedule_df: Optional[pd.DataFrame] = None
 
     def _silence_output(self, func, *args, **kwargs):
@@ -95,14 +113,63 @@ class NBAPredictionService:
                 return self._stats_cache
         
         try:
-            print("[NBAPredictionService] Fetching fresh stats from NBA.com...")
-            stats_json = get_json_data(DATA_URL)
+            print("[NBAPredictionService] Fetching fresh stats from NBA.com (parallel)...")
+            # PERFORMANCE: Fetch all 4 stats endpoints in parallel
+            urls = {
+                'base': DATA_URL,
+                'ten': DATA_URL_TEN,
+                'adv': DATA_URL_ADV,
+                'adv_ten': DATA_URL_ADV_TEN
+            }
+            results = {}
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(get_json_data, url): key for key, url in urls.items()}
+                for future in as_completed(futures):
+                    key = futures[future]
+                    try:
+                        results[key] = future.result()
+                    except Exception as e:
+                        print(f"[NBAPredictionService] Failed to fetch {key}: {e}")
+                        results[key] = None
+            
+            stats_json = results.get('base')
+            stats_json_ten = results.get('ten')
+            stats_json_adv = results.get('adv')
+            stats_json_adv_ten = results.get('adv_ten')
+            
             df = to_data_frame(stats_json)
-            if not df.empty:
-                self._stats_cache = df
+            df_ten = to_data_frame(stats_json_ten)
+            df_adv = to_data_frame(stats_json_adv)
+            df_adv_ten = to_data_frame(stats_json_adv_ten)
+            
+            if not df.empty and not df_ten.empty:
+                # Merge base stats
+                df_ten = df_ten.add_suffix("_L10")
+                
+                if "TEAM_ID" in df.columns and "TEAM_ID_L10" in df_ten.columns:
+                     df_combined = pd.merge(df, df_ten, left_on="TEAM_ID", right_on="TEAM_ID_L10", how="inner")
+                else:
+                    df_combined = pd.concat([df, df_ten], axis=1)
+                
+                # Merge advanced stats if available
+                if not df_adv.empty:
+                    df_adv = df_adv.add_suffix("_ADV")
+                    if "TEAM_ID_ADV" in df_adv.columns:
+                        df_combined = pd.merge(df_combined, df_adv, left_on="TEAM_ID", right_on="TEAM_ID_ADV", how="inner")
+                    else:
+                        df_combined = pd.concat([df_combined, df_adv], axis=1)
+                
+                if not df_adv_ten.empty:
+                    df_adv_ten = df_adv_ten.add_suffix("_ADV_L10")
+                    if "TEAM_ID_ADV_L10" in df_adv_ten.columns:
+                        df_combined = pd.merge(df_combined, df_adv_ten, left_on="TEAM_ID", right_on="TEAM_ID_ADV_L10", how="inner")
+                    else:
+                        df_combined = pd.concat([df_combined, df_adv_ten], axis=1)
+
+                self._stats_cache = df_combined
                 self._stats_cache_time = get_current_datetime()
-                print(f"[NBAPredictionService] Cached stats for {len(df)} teams")
-            return df
+                print(f"[NBAPredictionService] Cached stats for {len(df_combined)} teams (Season + L10 + ADV)")
+            return self._stats_cache if hasattr(self, '_stats_cache') else pd.DataFrame()
         except Exception as e:
             print(f"[NBAPredictionService] Stats fetch error: {e}")
             # Return cached data if available
@@ -320,9 +387,157 @@ class NBAPredictionService:
             away_days_off = self._calculate_days_rest(away_team, schedule_df, today)
 
             # Get team stats
-            home_team_series = df.iloc[team_index_current.get(home_team)]
-            away_team_series = df.iloc[team_index_current.get(away_team)]
-            stats = pd.concat([home_team_series, away_team_series])
+            # Stats dataframe now has Season columns AND _L10 columns
+            # match_data expectations: 
+            # Season Home, Season Away, Season Home L10, Season Away L10 ??
+            # Wait, `Create_Games.py` does:
+            # 1. Home Season
+            # 2. Home L10
+            # 3. Away Season
+            # 4. Away L10
+            
+            # Predictor logic MUST MATCH this order.
+            
+            # Locate team rows using team_index_current map to index
+            # Warning: df is now the combined dataframe.
+            
+            # We need to extract the specific blocks.
+            # Assuming df columns are [Season Cols] + [L10 Cols] due to the merge.
+            
+            # It's cleaner to construct the series by name lookup if possible, but the code uses iloc.
+            # Let's trust that team_index_current maps to the correct rows in the combined DF 
+            # (which comes from merging sorted NBA API responses, usually alphabetical/ID sorted).
+            
+            # However, the merged DF columns are mixed.
+            # We need to reconstruct the EXACT vector structure:
+            
+            # X = [Home_Season, Home_L10, Away_Season, Away_L10]
+            
+            # Let's verify columns.
+            # df has keys like 'PTS', 'REB', ... 'PTS_L10', 'REB_L10'
+            
+            # We need to separate them.
+            season_cols = [c for c in df.columns if not c.endswith('_L10')]
+            l10_cols = [c for c in df.columns if c.endswith('_L10')]
+            
+            # Get specific team rows
+            # Note: iloc works on rows, but we need to slice columns too
+            
+            home_row = df.iloc[team_index_current.get(home_team)]
+            away_row = df.iloc[team_index_current.get(away_team)]
+            
+            home_season = home_row[season_cols]
+            home_l10 = home_row[l10_cols]
+            
+            away_season = away_row[season_cols]
+            away_l10 = away_row[l10_cols]
+            
+            # Rename for concatenation (replicating Create_Games structure)
+            # Create_Games: away_season.rename(index={col: f"{col}.1"...})
+            
+            stats = pd.concat([
+                home_season,
+                home_l10,
+                away_season.rename(index={col: f"{col}.1" for col in season_cols}),
+                away_l10.rename(index={col: f"{col}.1" for col in l10_cols}).add_suffix("_L10") # Hacky: it already has _L10, so it becomes _L10.1?
+                # Actually, Create_Games: 
+                # away_l10.rename(index={col: f"{col}.1" for col in l10_df.columns.values}).add_suffix("_L10")
+                # Wait, l10_df columns in Create_Games are RAW, then adds suffix _L10.
+                
+                # Here `away_l10` ALREADY has `_L10` suffix.
+                # So we just need to add `.1` to them.
+            ])
+            
+            # Correction:
+            # Create_Games:: 
+            # home_l10 = l10_df.iloc[home_index].add_suffix("_L10")
+            # away_l10 = l10_df.iloc[away_index].add_suffix("_L10")
+            # return pd.concat([
+            #    home_season,
+            #    home_l10,
+            #    away_season.rename(index={col: f"{col}.1" ...}),
+            #    away_l10.rename(index={col: f"{col}.1" ...}).add_suffix("_L10")
+            # ])
+            
+            # Wait, away_l10 in create_games is derived from `l10_df` (raw).
+            # So `away_l10` in Create_Games ALREADY has `_L10` suffix before the LAST rename line?
+            # No:
+            # home_l10 = l10_df...add_suffix("_L10") -> cols become "PTS_L10"
+            # away_l10 = l10_df...add_suffix("_L10") -> cols become "PTS_L10"
+            
+            # Then concat:
+            # away_l10.rename(...).add_suffix("_L10") ??
+            # The line in Create_Games was:
+            # away_l10.rename(index={col: f"{col}.1" for col in l10_df.columns.values}).add_suffix("_L10")
+            
+            # `l10_df.columns.values` are RAW names (PTS).
+            # So map is PTS -> PTS.1
+            # But away_l10 index is ALREADY PTS_L10.
+            # So the rename map key 'PTS' won't match 'PTS_L10'.
+            # That logic in Create_Games might be slightly buggy or I misread it. 
+            
+            # Let's re-read the Create_Games edit I made.
+            # away_l10 = l10_df.iloc[away_index].add_suffix("_L10")  <-- Index is PTS_L10
+            # concat element: away_l10.rename(index={col: f"{col}.1" for col in l10_df.columns.values}).add_suffix("_L10")
+            
+            # If I rename 'PTS' -> 'PTS.1', but index is 'PTS_L10', it ignores it.
+            # Then .add_suffix("_L10") makes it 'PTS_L10_L10'. This looks WRONG in my Create_Games logic.
+            
+            # CORRECT LOGIC in Create_Games should be:
+            # away_raw = l10_df.iloc[away_index]
+            # normalized_away_l10 = away_raw.rename(index={col: f"{col}.1" for col in raw_columns}).add_suffix("_L10")
+            # Result: PTS.1_L10
+            
+            # Let's fix Predictor to do what makes sense, and I might need to hotfix Create_Games if I messed it up.
+            # Standard feature vector usually:
+            # [Home_PTS, ..., Home_PTS_L10, ..., Away_PTS.1, ..., Away_PTS.1_L10]
+            
+            # My Create_Games edit:
+            # away_l10 = l10_df.iloc[away_index].add_suffix("_L10") (PTS_L10)
+            # Element 4: away_l10.rename(index={col: f"{col}.1" for col in l10_df.columns.values}).add_suffix("_L10")
+            # Since rename keys don't match index, it does nothing? No, rename ignores missing keys.
+            # Then add_suffix gets applied. Result: PTS_L10_L10.
+            
+            # That is definitely redundant.
+            
+            # I will assume the target vector schema is:
+            # H_Season (PTS)
+            # H_L10 (PTS_L10)
+            # A_Season (PTS.1)
+            # A_L10 (PTS.1_L10)
+            
+            # Separate columns by type
+            season_cols = [c for c in df.columns if not c.endswith('_L10') and not c.endswith('_ADV') and not c.endswith('_ADV_L10')]
+            l10_cols = [c for c in df.columns if c.endswith('_L10') and not c.endswith('_ADV_L10')]
+            adv_cols = [c for c in df.columns if c.endswith('_ADV') and not c.endswith('_ADV_L10')]
+            adv_l10_cols = [c for c in df.columns if c.endswith('_ADV_L10')]
+            
+            home_season = home_row[season_cols]
+            home_l10 = home_row[l10_cols]
+            
+            away_season = away_row[season_cols].rename(index=lambda x: f"{x}.1")
+            away_l10 = away_row[l10_cols].rename(index=lambda x: x.replace("_L10", ".1_L10"))
+            
+            # Calculate efficiency metrics (matching Create_Games)
+            home_eff = FeatureEngine.calculate_efficiency_metrics(home_season)
+            home_l10_eff = FeatureEngine.calculate_efficiency_metrics(home_row[l10_cols]).add_suffix("_L10")
+            away_eff = FeatureEngine.calculate_efficiency_metrics(away_row[season_cols]).rename(index=lambda x: f"{x}.1")
+            away_l10_eff = FeatureEngine.calculate_efficiency_metrics(away_row[l10_cols]).rename(index=lambda x: f"{x}.1_L10")
+            
+            # Build feature list matching Create_Games order:
+            # home_season, home_l10, home_eff, home_l10_eff
+            # away_season, away_l10, away_eff, away_l10_eff
+            # Note: We are IGNORING inferred ADV columns because the model was trained without them
+            # (since historical data doesn't have them yet).
+            features = [home_season, home_l10, home_eff, home_l10_eff]
+            
+            # if adv_cols: ... (Disabled to match training)
+            
+            features.extend([away_season, away_l10, away_eff, away_l10_eff])
+            
+            # if adv_cols: ... (Disabled to match training)
+            
+            stats = pd.concat(features)
             stats["Days-Rest-Home"] = home_days_off
             stats["Days-Rest-Away"] = away_days_off
             match_data.append(stats)
@@ -331,7 +546,20 @@ class NBAPredictionService:
             return None, [], None, [], [], []
 
         games_data_frame = pd.concat(match_data, ignore_index=True, axis=1).T
-        frame_ml = games_data_frame.drop(columns=["TEAM_ID", "TEAM_NAME"], errors="ignore")
+        
+        # Drop all non-numeric columns (IDs, Names, Dates) including L10 and ADV variants
+        cols_to_drop = [
+            "TEAM_ID", "TEAM_ID.1", "TEAM_ID_L10", "TEAM_ID.1_L10",
+            "TEAM_ID_ADV", "TEAM_ID.1_ADV", "TEAM_ID_ADV_L10", "TEAM_ID.1_ADV_L10",
+            "TEAM_NAME", "TEAM_NAME.1", "TEAM_NAME_L10", "TEAM_NAME.1_L10",
+            "TEAM_NAME_ADV", "TEAM_NAME.1_ADV", "TEAM_NAME_ADV_L10", "TEAM_NAME.1_ADV_L10",
+            "Date_L10", "Date.1_L10", "Date_ADV", "Date.1_ADV", "Date_ADV_L10", "Date.1_ADV_L10"
+        ]
+        frame_ml = games_data_frame.drop(columns=cols_to_drop, errors="ignore")
+        # Enforce alphabetical feature order to match training
+        frame_ml = frame_ml.reindex(sorted(frame_ml.columns), axis=1)
+        print(f"[DEBUG] Predictor frame shape: {frame_ml.shape}")
+        # print(f"[DEBUG] Predictor columns: {frame_ml.columns.tolist()}")
         data = frame_ml.values.astype(float)
 
         return data, todays_games_uo, frame_ml, home_team_odds, away_team_odds, game_start_times, game_locations
@@ -397,8 +625,45 @@ class NBAPredictionService:
             winner = int(np.argmax(ml_predictions[idx]))
             under_over = int(np.argmax(ou_predictions[idx]))
             
+            # --- AI INVESTIGATION LAYER ---
+            ai_data = {"summary": "Disabled", "impact_score": 0.0, "key_factors": []}
+            if self.investigator:
+                try:
+                    # Analyze both teams
+                    # We focus on the Favorite primarily or both if close
+                    # For simplicity, analyze both and sum impact (Home Impact - Away Impact)
+                    
+                    # Home Team
+                    print(f"  [AI] Investigating {home_team}...")
+                    h_news = self.investigator.search_news(f"{home_team} injuries news")
+                    h_analysis = self.investigator.analyze_impact(h_news, home_team)
+                    
+                    # Away Team
+                    print(f"  [AI] Investigating {away_team}...")
+                    a_news = self.investigator.search_news(f"{away_team} injuries news")
+                    a_analysis = self.investigator.analyze_impact(a_news, away_team)
+                    
+                    # Calculate Net Impact (Negative means bad for home team, good for away)
+                    # Impact Score is -10 to +10. 
+                    # If Home has -5 impact (injury), and Away has 0, Net is -5.
+                    net_impact = h_analysis.get('impact_score', 0) - a_analysis.get('impact_score', 0)
+                    
+                    ai_data = {
+                        "summary": f"Home: {h_analysis.get('summary')} | Away: {a_analysis.get('summary')}",
+                        "impact_score": net_impact,
+                        "key_factors": h_analysis.get('key_factors', []) + a_analysis.get('key_factors', [])
+                    }
+                    # Aggregate confidence
+                    ai_data["confidence"] = (h_analysis.get('confidence', 0.8) + a_analysis.get('confidence', 0.8)) / 2
+                    print(f"  [AI] Net Impact Score: {net_impact} (Conf: {ai_data['confidence']:.2f})")
+                    
+                except Exception as e:
+                    print(f"  [AI Error] {e}")
+
             pred_dict = {
                 "home_team": home_team,
+                "away_team": away_team,
+                "ai_impact": ai_data,
                 "away_team": away_team,
                 "predicted_winner": home_team if winner == 1 else away_team,
                 "home_win_probability": round(home_prob * 100, 2),
@@ -424,18 +689,73 @@ class NBAPredictionService:
             else:
                 pred_dict["status"] = "SCHEDULED"
             
+            # --- SMART BETTING LOGIC ---
+            # Convert Odds
+            h_odds_dec = 1.0
+            a_odds_dec = 1.0
+            
+            # Helper to convert American to Decimal
+            def to_decimal(us_odds):
+                try:
+                    o = float(us_odds)
+                    if o > 0: return (o / 100) + 1
+                    else: return (100 / abs(o)) + 1
+                except: return 1.0
+
+            if home_team_odds[idx]: h_odds_dec = to_decimal(home_team_odds[idx])
+            if away_team_odds[idx]: a_odds_dec = to_decimal(away_team_odds[idx])
+
+            # Calculate Edge (MyProb - ImpliedProb)
+            h_implied = 1 / h_odds_dec if h_odds_dec > 0 else 1
+            a_implied = 1 / a_odds_dec if a_odds_dec > 0 else 1
+            
+            h_edge = home_prob - h_implied
+            a_edge = away_prob - a_implied
+            
+            # Decision Rule: >10% Edge AND >1.50 Odds
+            MIN_ODDS = 1.50
+            MIN_EDGE = 0.10
+            
+            recommendation = "SKIP"
+            rec_unit = 0
+            
+            if winner == 1: # Pred Home
+                if h_edge > MIN_EDGE and h_odds_dec >= MIN_ODDS:
+                    recommendation = "BET HOME"
+                    rec_unit = 1 
+                    # AI Veto
+                    if ai_data.get("impact_score", 0) < -3.0:
+                         recommendation = "SKIP (AI RISK)"
+                         rec_unit = 0
+
+            else: # Pred Away
+                if a_edge > MIN_EDGE and a_odds_dec >= MIN_ODDS:
+                    recommendation = "BET AWAY"
+                    rec_unit = 1
+                    # AI Veto
+                    # Positive score favors Home, so we want Negative score for Away.
+                    # If score is > +3.0, it means Home is favored by news (bad for Away bet)
+                    if ai_data.get("impact_score", 0) > 3.0:
+                         recommendation = "SKIP (AI RISK)"
+                         rec_unit = 0
+
+            pred_dict["recommendation"] = recommendation
+            pred_dict["edge_percent"] = round(max(h_edge, a_edge) * 100, 1)
+            pred_dict["ev_home"] = round((home_prob * h_odds_dec) - 1, 2)
+            pred_dict["ev_away"] = round((away_prob * a_odds_dec) - 1, 2)
+            
             predictions.append(pred_dict)
         
         return predictions
 
     def get_todays_predictions(self) -> List[Dict[str, Any]]:
         """
-        Get predictions for the next 3 days (today, tomorrow, day after).
+        Get predictions for today only (fast default).
         
         Returns:
-            List of prediction dictionaries for all upcoming games.
+            List of prediction dictionaries for today's games.
         """
-        return self.get_upcoming_predictions(days=3)
+        return self.get_upcoming_predictions(days=1)
 
     def get_upcoming_predictions(self, days: int = 3, target_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """

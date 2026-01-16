@@ -85,6 +85,11 @@ export const MatchCard: React.FC<MatchCardProps> = ({ prediction, onPress }) => 
                             <Text style={styles.leagueIcon}>🏀</Text>
                         </View>
                         <Text style={styles.leagueText}>{t('nba_league')}</Text>
+                        {prediction.ai_impact && (
+                            <View style={styles.aiBadge}>
+                                <Text style={{ fontSize: 10 }}>🕵️‍♂️</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Status Indicators */}
@@ -266,6 +271,15 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: colors.accentOrange,
         letterSpacing: -0.3,
+    },
+    aiBadge: {
+        marginLeft: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        backgroundColor: '#F0F0F0',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
     },
 
     // Status Badges

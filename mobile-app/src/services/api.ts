@@ -23,8 +23,13 @@ import Constants from 'expo-constants';
 // ============================================================
 // Automatically detects the Metro bundler IP (your computer's IP)
 // This enables the app to connect without manual IP updates.
+// If testing on a DIFFERENT network (e.g. LTE), fill TUNNEL_URL below.
+const TUNNEL_URL = "";
 
 const getBaseUrl = (): string => {
+    // 0. Priority: Manual Tunnel (e.g. ngrok)
+    if (TUNNEL_URL) return TUNNEL_URL;
+
     // 1. Try to get IP from Expo config (works in Expo Go)
     const debuggerHost = Constants.expoConfig?.hostUri;
 
@@ -41,9 +46,7 @@ const getBaseUrl = (): string => {
     }
 
     // 3. PHYSICAL DEVICE FALLBACK
-    // REPLACE THIS IP with your computer's LAN IP (e.g., 192.168.1.15)
-    // Run 'ipconfig' (Windows) or 'ifconfig' (Mac) to find it.
-    return 'http://192.168.18.9:8000'; // Update this if connection fails!
+    return 'http://192.168.18.9:8000';
 };
 
 // ============================================================

@@ -17,6 +17,14 @@ export interface Prediction {
     away_odds: number;
     start_time_utc: string; // ISO 8601
     timestamp: string;      // generated_at
+    recommendation?: string;
+    edge_percent?: number;
+    ai_impact?: {
+        summary: string;
+        impact_score: number;
+        key_factors: string[];
+        confidence: number;
+    };
     status?: string;        // 'SCHEDULED', 'LIVE', 'FINAL'
     home_score?: number;
     away_score?: number;

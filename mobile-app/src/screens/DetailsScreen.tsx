@@ -168,6 +168,40 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({ prediction, onBack
                     </View>
                 </View>
 
+                {/* 6. AI News Analysis Section */}
+                {prediction.ai_impact && (
+                    <View style={styles.aiNewsCard}>
+                        <View style={styles.aiNewsHeader}>
+                            <Text style={styles.aiNewsTitle}>{t('ai_news_title')}</Text>
+                            <View style={[styles.aiScoreBadge, { backgroundColor: prediction.ai_impact.impact_score > 0 ? '#E8F5E9' : (prediction.ai_impact.impact_score < 0 ? '#FFEBEE' : '#F5F5F5') }]}>
+                                <Text style={[styles.aiScoreText, { color: prediction.ai_impact.impact_score > 0 ? '#4CAF50' : (prediction.ai_impact.impact_score < 0 ? '#FF5252' : '#9E9E9E') }]}>
+                                    {prediction.ai_impact.impact_score > 0 ? '📈 ' : (prediction.ai_impact.impact_score < 0 ? '📉 ' : '')}
+                                    {Math.abs(prediction.ai_impact.impact_score).toFixed(1)}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <Text style={styles.aiSummaryLabel}>{t('ai_summary')}</Text>
+                        <Text style={styles.aiSummaryText}>{prediction.ai_impact.summary}</Text>
+
+                        {prediction.ai_impact.key_factors && prediction.ai_impact.key_factors.length > 0 && (
+                            <View style={styles.aiFactorsContainer}>
+                                <Text style={styles.aiSummaryLabel}>{t('ai_factors')}</Text>
+                                {prediction.ai_impact.key_factors.map((factor, index) => (
+                                    <View key={index} style={styles.factorRow}>
+                                        <Text style={styles.factorBullet}>•</Text>
+                                        <Text style={styles.factorText}>{factor}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <View style={styles.aiConfidenceRow}>
+                            <Text style={styles.aiConfLabel}>{t('confidence')}: {Math.round(prediction.ai_impact.confidence * 100)}%</Text>
+                        </View>
+                    </View>
+                )}
+
                 <LinearGradient
                     colors={[colors.primary + '15', colors.primary + '05']}
                     style={styles.insightBox}
@@ -412,6 +446,84 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 0.5,
         textTransform: 'uppercase',
+    },
+
+    // AI News Card Styles
+    aiNewsCard: {
+        backgroundColor: '#fff',
+        borderRadius: borderRadius.xl,
+        padding: spacing.lg,
+        marginBottom: spacing.lg,
+        borderLeftWidth: 4,
+        borderLeftColor: colors.primary,
+        ...shadows.card,
+    },
+    aiNewsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.md,
+    },
+    aiNewsTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: colors.textMain,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    aiScoreBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    aiScoreText: {
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    aiSummaryLabel: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: colors.textLight,
+        textTransform: 'uppercase',
+        marginBottom: 4,
+        marginTop: 8,
+    },
+    aiSummaryText: {
+        fontSize: 14,
+        color: colors.textMain,
+        lineHeight: 20,
+    },
+    aiFactorsContainer: {
+        marginTop: spacing.md,
+        paddingTop: spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
+    },
+    factorRow: {
+        flexDirection: 'row',
+        marginBottom: 4,
+        paddingLeft: 4,
+    },
+    factorBullet: {
+        fontSize: 14,
+        color: colors.primary,
+        marginRight: 8,
+    },
+    factorText: {
+        flex: 1,
+        fontSize: 13,
+        color: colors.textSecondary,
+        fontWeight: '500',
+    },
+    aiConfidenceRow: {
+        marginTop: spacing.md,
+        alignItems: 'flex-end',
+    },
+    aiConfLabel: {
+        fontSize: 10,
+        color: colors.textLight,
+        fontWeight: '700',
+        fontStyle: 'italic',
     },
 });
 
