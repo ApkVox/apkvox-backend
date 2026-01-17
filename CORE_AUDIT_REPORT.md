@@ -178,7 +178,6 @@ class NBAPredictionService:
 
 | Librería | Versión Requerida | Estado |
 |----------|-------------------|--------|
-| colorama | 0.4.6 | ✅ Instalado |
 | pandas | 2.1.1 | ✅ Instalado (última versión) |
 | sbrscrape | 0.0.10 | ✅ Instalado |
 | xgboost | 2.0.0 | ✅ Instalado (v3.1.3) |
