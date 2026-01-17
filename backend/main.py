@@ -217,6 +217,19 @@ async def get_predictions(
                             rec["ou_confidence"] = rec.get("ou_confidence", 0) or 0
                             rec["under_over_line"] = rec.get("under_over_line", 0) or 0
                             rec["under_over_prediction"] = rec.get("under_over_prediction", "N/A") or "N/A"
+                            rec["predicted_winner"] = rec.get("predicted_winner") or "N/A"
+                            rec["home_odds"] = rec.get("home_odds") or 0
+                            rec["away_odds"] = rec.get("away_odds") or 0
+                            rec["status"] = rec.get("status", "FINAL")
+                            rec["recommendation"] = rec.get("recommendation", "NO DATA")
+                            # Ensure ai_impact is a dict if missing
+                            if "ai_impact" not in rec or not rec["ai_impact"]:
+                                rec["ai_impact"] = {
+                                    "summary": "Sin análisis histórico",
+                                    "impact_score": 0,
+                                    "key_factors": [],
+                                    "confidence": 0
+                                }
                             target_predictions.append(rec)
                     else:
                         # No stored predictions - FALLBACK: Show schedule games with scores from CSV
