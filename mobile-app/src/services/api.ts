@@ -13,9 +13,34 @@ import { Prediction, PredictionsResponse, HealthResponse } from '../types';
 // API Base URL Configuration
 // ============================================================
 // Production URL - Render Cloud Server
-// No need for local IP detection anymore!
-
 const API_BASE_URL = "https://apkvox-api.onrender.com";
+// Local Development URL (Your computer's IP)
+// const API_BASE_URL = "http://192.168.18.9:8004";
+
+// Strategy interfaces
+export interface StrategyResponse {
+    strategy: string;
+    bankroll_used: number;
+    proposed_bets: ProposedBet[];
+    risk_analysis: RiskAnalysis;
+}
+
+export interface ProposedBet {
+    prediction_id: string;
+    date: string;
+    match: string;
+    selection: string;
+    odds: number;
+    stake_amount: number;
+    status: string;
+    is_real_bet: boolean;
+}
+
+export interface RiskAnalysis {
+    advisor: string;
+    message: string;
+    exposure_rating: string;
+}
 
 const getBaseUrl = (): string => {
     return API_BASE_URL;
@@ -155,6 +180,19 @@ class ApiService {
             return MOCK_PREDICTIONS;
         }
     }
+
+    /**
+     * Get Strategy Optimization (The Sniper Engine)
+     */
+    async optimizeStrategy(bankroll: number): Promise<StrategyResponse | null> {
+        try {
+            const response = await this.client.post<StrategyResponse>('/api/strategy/optimize', { bankroll });
+            return response.data;
+        } catch (error) {
+            console.log('[API] Strategy optimization failed:', error);
+            return null;
+        }
+    }
 }
 
 // Singleton instance
@@ -163,6 +201,7 @@ const apiService = new ApiService();
 // Export functions
 export const checkHealth = () => apiService.checkHealth();
 export const getPredictions = (date?: string | null, sportsbook?: string) => apiService.getPredictions(date, sportsbook);
+export const optimizeStrategy = (bankroll: number) => apiService.optimizeStrategy(bankroll);
 export const setMockMode = (enabled: boolean) => apiService.setMockMode(enabled);
 
 export default apiService;

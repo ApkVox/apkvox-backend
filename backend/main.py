@@ -533,12 +533,12 @@ def optimize_strategy(request: StrategyRequest):
       - Sentinel Probable Risk Analysis (AI Text)
     """
     # 1. Get today's predictions
-    today_str = datetime.now(EST).strftime("%Y-%m-%d")
-    raw_preds = database.get_history(limit=1, game_date=today_str) 
+    today_str = get_current_date().strftime("%Y-%m-%d")
+    raw_preds = get_history(limit=1, game_date=today_str) 
     
     if not raw_preds:
          try:
-            raw_preds = predictor.get_predictions_for_date(today_str)
+            raw_preds = get_prediction_service().get_predictions_for_date(today_str)
          except:
             raw_preds = []
 

@@ -14,6 +14,7 @@ import MatchCard from '../components/MatchCard';
 interface HomeScreenProps {
     onGameSelect: (prediction: Prediction) => void;
     onSettingsPress: () => void;
+    onSniperPress: () => void;
 }
 
 // Helper to get today's date key using Colombia timezone
@@ -45,7 +46,7 @@ const getDateKeyFromISO = (isoString: string | null) => {
     }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettingsPress }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettingsPress, onSniperPress }) => {
     const { t, i18n } = useTranslation();
     const [allPredictions, setAllPredictions] = useState<Prediction[]>([]);
     const [loading, setLoading] = useState(true);
@@ -147,7 +148,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
             <View style={styles.bottomNav}>
                 <NavItem icon="🏠" label={t('home')} active />
                 <NavItem icon="📜" label={t('history')} />
-                <NavItem icon="📈" label={t('insights')} />
+                <TouchableOpacity onPress={onSniperPress}>
+                    <NavItem icon="📈" label={t('insights')} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={onSettingsPress}>
                     <NavItem icon="⚙️" label={t('settings')} />
                 </TouchableOpacity>

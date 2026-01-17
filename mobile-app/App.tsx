@@ -19,6 +19,7 @@ import { PreferencesProvider } from './src/context/PreferencesContext'; // Conte
 import HomeScreen from './src/screens/HomeScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import SniperScreen from './src/screens/SniperScreen';
 
 // Custom Theme based on our centralized theme.ts
 const paperTheme = {
@@ -34,7 +35,7 @@ const paperTheme = {
 
 export default function App() {
   // Navigation State
-  const [currentView, setCurrentView] = useState<'HOME' | 'DETAILS' | 'SETTINGS'>('HOME');
+  const [currentView, setCurrentView] = useState<'HOME' | 'DETAILS' | 'SETTINGS' | 'SNIPER'>('HOME');
   const [selectedPrediction, setSelectedPrediction] = useState<Prediction | null>(null);
 
   const handleGameSelect = (prediction: Prediction) => {
@@ -44,6 +45,10 @@ export default function App() {
 
   const handleSettingsPress = () => {
     setCurrentView('SETTINGS');
+  };
+
+  const handleSniperPress = () => {
+    setCurrentView('SNIPER');
   };
 
   const handleBack = () => {
@@ -63,6 +68,7 @@ export default function App() {
                 <HomeScreen
                   onGameSelect={handleGameSelect}
                   onSettingsPress={handleSettingsPress}
+                  onSniperPress={handleSniperPress}
                 />
               )}
 
@@ -75,6 +81,10 @@ export default function App() {
 
               {currentView === 'SETTINGS' && (
                 <SettingsScreen onBack={handleBack} />
+              )}
+
+              {currentView === 'SNIPER' && (
+                <SniperScreen onBack={handleBack} />
               )}
             </SafeAreaView>
           </PaperProvider>
