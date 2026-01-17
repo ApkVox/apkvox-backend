@@ -532,31 +532,47 @@ def optimize_strategy(request: StrategyRequest):
       - Kelly Stake Sizes
       - Sentinel Probable Risk Analysis (AI Text)
     """
-    # 1. Get today's predictions
-    today_str = get_current_date().strftime("%Y-%m-%d")
-    raw_preds = get_history(limit=1, game_date=today_str) 
-    
-    if not raw_preds:
-         try:
-            raw_preds = get_prediction_service().get_predictions_for_date(today_str)
-         except:
-            raw_preds = []
+    try:
+        # 1. Get today's predictions
+        today_str = get_current_date().strftime("%Y-%m-%d")
+        # Ensure we are using the imported function, not database module directly
+        raw_preds = get_history(limit=1, game_date=today_str) 
+        
+        if not raw_preds:
+            try:
+                # Use the service getter
+                raw_preds = get_prediction_service().get_predictions_for_date(today_str)
+            except Exception as inner_e:
+                print(f"[Sniper] Error fetching fresh predictions: {inner_e}")
+                raw_preds = []
 
-    # 2. Optimize Portfolio (Kelly + Sniper)
-    proposed_bets = finance_engine.optimize_portfolio(raw_preds, request.bankroll)
-    
-    # 3. Sentinel Risk Analysis
-    # Convert bet models to dicts for AI
-    bets_dicts = [bet.model_dump() for bet in proposed_bets]
-    risk_advice = sentinel.analyze_risk(bets_dicts, request.bankroll)
-    
-    return {
-        "strategy": "Sniper (Edge > 15%, Odds > 1.60)",
-        "bankroll_used": request.bankroll,
-        "proposed_bets": bets_dicts,
-        "risk_analysis": {
-            "advisor": "Sentinel AI",
-            "message": risk_advice,
-            "exposure_rating": "HIGH" if len(bets_dicts) > 5 else "MODERATE"
+        # 2. Optimize Portfolio (Kelly + Sniper)
+        # Ensure bankroll is float
+        bankroll = float(request.bankroll)
+        proposed_bets = finance_engine.optimize_portfolio(raw_preds, bankroll)
+        
+        # 3. Sentinel Risk Analysis
+        # Convert bet models to dicts for AI
+        bets_dicts = [bet.model_dump() for bet in proposed_bets]
+        
+        try:
+            risk_advice = sentinel.analyze_risk(bets_dicts, bankroll)
+        except Exception as e:
+            print(f"[Sniper] Sentinel error: {e}")
+            risk_advice = "Sentinel AI is taking a nap. (Error de conexión)"
+
+        return {
+            "strategy": "Sniper (Edge > 15%, Odds > 1.60)",
+            "bankroll_used": bankroll,
+            "proposed_bets": bets_dicts,
+            "risk_analysis": {
+                "advisor": "Sentinel AI",
+                "message": risk_advice,
+                "exposure_rating": "HIGH" if len(bets_dicts) > 5 else "MODERATE"
+            }
         }
-    }
+    except Exception as e:
+        import traceback
+        error_msg = f"Sniper Crash: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
