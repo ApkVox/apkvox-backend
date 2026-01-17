@@ -5,12 +5,8 @@ import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from colorama import Fore, Style, init, deinit
 from src.Utils import Expected_Value
 from src.Utils import Kelly_Criterion as kc
-
-
-init()
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_DIR = BASE_DIR / "Models" / "XGBoost_Models"
@@ -68,17 +64,10 @@ def _predict_probs(model, data, calibrator=None):
 def _format_game_line(home_team, away_team, winner_is_home, winner_confidence, under_over, ou_value, ou_confidence):
     winner_team = home_team if winner_is_home else away_team
     loser_team = away_team if winner_is_home else home_team
-    winner_color = Fore.GREEN if winner_is_home else Fore.RED
-    loser_color = Fore.RED if winner_is_home else Fore.GREEN
     ou_label = "UNDER" if under_over == 0 else "OVER"
-    ou_color = Fore.MAGENTA if under_over == 0 else Fore.BLUE
     return (
-        f"{winner_color}{winner_team}{Style.RESET_ALL}"
-        f"{Fore.CYAN} ({winner_confidence}%)"
-        f"{Style.RESET_ALL} vs {loser_color}{loser_team}{Style.RESET_ALL}: "
-        f"{ou_color}{ou_label} {Style.RESET_ALL}{ou_value}"
-        f"{Style.RESET_ALL}{Fore.CYAN} ({ou_confidence}%)"
-        f"{Style.RESET_ALL}"
+        f"{winner_team} ({winner_confidence}%) vs {loser_team}: "
+        f"{ou_label} {ou_value} ({ou_confidence}%)"
     )
 
 
@@ -109,10 +98,6 @@ def _print_expected_value(
                     int(away_team_odds[idx]),
                 )
             )
-        expected_value_colors = {
-            "home_color": Fore.GREEN if ev_home > 0 else Fore.RED,
-            "away_color": Fore.GREEN if ev_away > 0 else Fore.RED,
-        }
         bankroll_descriptor = " Fraction of Bankroll: "
         bankroll_fraction_home = bankroll_descriptor + str(
             kc.calculate_kelly_criterion(home_team_odds[idx], ml_predictions_array[idx][1])
@@ -124,17 +109,13 @@ def _print_expected_value(
         print(
             home_team
             + " EV: "
-            + expected_value_colors["home_color"]
             + str(ev_home)
-            + Style.RESET_ALL
             + (bankroll_fraction_home if kelly_criterion else "")
         )
         print(
             away_team
             + " EV: "
-            + expected_value_colors["away_color"]
             + str(ev_away)
-            + Style.RESET_ALL
             + (bankroll_fraction_away if kelly_criterion else "")
         )
 
@@ -179,5 +160,5 @@ def xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team
             away_team_odds,
             kelly_criterion,
         )
-    finally:
-        deinit()
+    except Exception as e:
+        print(f"Error in xgb_runner: {e}")

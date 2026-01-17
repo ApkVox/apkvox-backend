@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import tensorflow as tf
-from colorama import Fore, Style
 
 from src.DataProviders.SbrOddsProvider import SbrOddsProvider
 from src.Predict import NN_Runner, XGBoost_Runner
@@ -95,11 +94,7 @@ def resolve_games(odds, sportsbook):
         game_key = f"{games[0][0]}:{games[0][1]}"
         if game_key not in odds:
             print(game_key)
-            print(
-                Fore.RED,
-                "--------------Games list not up to date for todays games!!! Scraping disabled until list is updated.--------------",
-            )
-            print(Style.RESET_ALL)
+            print("--------------Games list not up to date for todays games!!! Scraping disabled until list is updated.--------------")
             return games, None
         print(f"------------------{sportsbook} odds data------------------")
         for game_key in odds.keys():

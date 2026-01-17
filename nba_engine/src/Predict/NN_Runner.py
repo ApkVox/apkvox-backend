@@ -4,12 +4,9 @@ from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
-from colorama import Fore, Style, init, deinit
 from keras.models import load_model
 from src.Utils import Expected_Value
 from src.Utils import Kelly_Criterion as kc
-
-init()
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_DIR = BASE_DIR / "Models"
@@ -91,30 +88,18 @@ def nn_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_
             winner_confidence = round(winner_confidence[0][1] * 100, 1)
             if under_over == 0:
                 un_confidence = round(ou_predictions_array[count][0][0] * 100, 1)
-                print(
-                    Fore.GREEN + home_team + Style.RESET_ALL + Fore.CYAN + f" ({winner_confidence}%)" + Style.RESET_ALL + ' vs ' + Fore.RED + away_team + Style.RESET_ALL + ': ' +
-                    Fore.MAGENTA + 'UNDER ' + Style.RESET_ALL + str(todays_games_uo[
-                                                                        count]) + Style.RESET_ALL + Fore.CYAN + f" ({un_confidence}%)" + Style.RESET_ALL)
+                print(f"{home_team} ({winner_confidence}%) vs {away_team}: UNDER {todays_games_uo[count]} ({un_confidence}%)")
             else:
                 un_confidence = round(ou_predictions_array[count][0][1] * 100, 1)
-                print(
-                    Fore.GREEN + home_team + Style.RESET_ALL + Fore.CYAN + f" ({winner_confidence}%)" + Style.RESET_ALL + ' vs ' + Fore.RED + away_team + Style.RESET_ALL + ': ' +
-                    Fore.BLUE + 'OVER ' + Style.RESET_ALL + str(todays_games_uo[
-                                                                    count]) + Style.RESET_ALL + Fore.CYAN + f" ({un_confidence}%)" + Style.RESET_ALL)
+                print(f"{home_team} ({winner_confidence}%) vs {away_team}: OVER {todays_games_uo[count]} ({un_confidence}%)")
         else:
             winner_confidence = round(winner_confidence[0][0] * 100, 1)
             if under_over == 0:
                 un_confidence = round(ou_predictions_array[count][0][0] * 100, 1)
-                print(
-                    Fore.RED + home_team + Style.RESET_ALL + ' vs ' + Fore.GREEN + away_team + Style.RESET_ALL + Fore.CYAN + f" ({winner_confidence}%)" + Style.RESET_ALL + ': ' +
-                    Fore.MAGENTA + 'UNDER ' + Style.RESET_ALL + str(todays_games_uo[
-                                                                        count]) + Style.RESET_ALL + Fore.CYAN + f" ({un_confidence}%)" + Style.RESET_ALL)
+                print(f"{home_team} vs {away_team} ({winner_confidence}%): UNDER {todays_games_uo[count]} ({un_confidence}%)")
             else:
                 un_confidence = round(ou_predictions_array[count][0][1] * 100, 1)
-                print(
-                    Fore.RED + home_team + Style.RESET_ALL + ' vs ' + Fore.GREEN + away_team + Style.RESET_ALL + Fore.CYAN + f" ({winner_confidence}%)" + Style.RESET_ALL + ': ' +
-                    Fore.BLUE + 'OVER ' + Style.RESET_ALL + str(todays_games_uo[
-                                                                    count]) + Style.RESET_ALL + Fore.CYAN + f" ({un_confidence}%)" + Style.RESET_ALL)
+                print(f"{home_team} vs {away_team} ({winner_confidence}%): OVER {todays_games_uo[count]} ({un_confidence}%)")
         count += 1
     if kelly_criterion:
         print("------------Expected Value & Kelly Criterion-----------")
@@ -130,18 +115,13 @@ def nn_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_
                 Expected_Value.expected_value(ml_predictions_array[count][0][1], int(home_team_odds[count])))
             ev_away = float(
                 Expected_Value.expected_value(ml_predictions_array[count][0][0], int(away_team_odds[count])))
-        expected_value_colors = {'home_color': Fore.GREEN if ev_home > 0 else Fore.RED,
-                                 'away_color': Fore.GREEN if ev_away > 0 else Fore.RED}
-        bankroll_descriptor = ' Fraction of Bankroll: '
         bankroll_fraction_home = bankroll_descriptor + str(
             kc.calculate_kelly_criterion(home_team_odds[count], ml_predictions_array[count][0][1])) + '%'
         bankroll_fraction_away = bankroll_descriptor + str(
             kc.calculate_kelly_criterion(away_team_odds[count], ml_predictions_array[count][0][0])) + '%'
 
-        print(home_team + ' EV: ' + expected_value_colors['home_color'] + str(ev_home) + Style.RESET_ALL + (
+        print(home_team + ' EV: ' + str(ev_home) + (
             bankroll_fraction_home if kelly_criterion else ''))
-        print(away_team + ' EV: ' + expected_value_colors['away_color'] + str(ev_away) + Style.RESET_ALL + (
+        print(away_team + ' EV: ' + str(ev_away) + (
             bankroll_fraction_away if kelly_criterion else ''))
         count += 1
-
-    deinit()
