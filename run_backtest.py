@@ -199,5 +199,5 @@ class FinancialBacktester:
 
 if __name__ == "__main__":
     tester = FinancialBacktester(initial_bankroll=50000)
-    # Using stricter parameters defined inside run()
-    tester.run(strategy="kelly", start_date="2023-10-24", end_date="2024-06-20")
+    # Most recent 4 months: roughly 2025-09-01 to 2026-01-07
+    tester.run(strategy="kelly", start_date="2025-09-01", end_date="2026-01-07")

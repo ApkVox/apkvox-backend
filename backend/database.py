@@ -72,6 +72,37 @@ def init_db():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_predictions_date ON predictions(prediction_date DESC);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_insights_team_date ON ai_insights(team_name, game_date);")
             
+            # 3. Bet Ledger (Fintech)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS bet_ledger (
+                    id SERIAL PRIMARY KEY,
+                    prediction_id TEXT,
+                    date DATE NOT NULL,
+                    match TEXT NOT NULL,
+                    selection TEXT NOT NULL,
+                    odds REAL NOT NULL,
+                    stake_amount REAL NOT NULL,
+                    status TEXT DEFAULT 'PENDING',
+                    pnl REAL DEFAULT 0.0,
+                    is_real_bet BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bet_ledger_date ON bet_ledger(date);")
+
+            # 4. Portfolio History (Fintech)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS portfolio_history (
+                    id SERIAL PRIMARY KEY,
+                    date DATE NOT NULL UNIQUE,
+                    total_balance REAL NOT NULL,
+                    daily_profit REAL DEFAULT 0.0,
+                    roi_percentage REAL DEFAULT 0.0,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_history_date ON portfolio_history(date DESC);")
+            
         conn.commit()
         print("[Database] Initialized PostgreSQL tables (predictions, ai_insights)")
     except Exception as e:
@@ -412,5 +443,109 @@ def get_insights_for_date(game_date: str) -> Dict[str, Dict[str, Any]]:
     except Exception as e:
         print(f"[Database] Error getting insights for date: {e}")
         return {}
+    finally:
+        conn.close()
+
+
+# ============================================================
+# Fintech Engine (Bet Ledger & Portfolio)
+# ============================================================
+from .models import BetLedger, PortfolioSnapshot
+
+def log_bet(bet: BetLedger) -> Optional[int]:
+    """
+    Log a new bet or update existing one in the ledger.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO bet_ledger (
+                    prediction_id, date, match, selection, odds, 
+                    stake_amount, status, pnl, is_real_bet, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id;
+            """, (
+                bet.prediction_id, bet.date, bet.match, bet.selection,
+                bet.odds, bet.stake_amount, bet.status, bet.pnl, bet.is_real_bet
+            ))
+            new_id = cursor.fetchone()[0]
+            conn.commit()
+            return new_id
+    except Exception as e:
+        print(f"[Database] Error logging bet: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def get_pending_bets() -> List[Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT * FROM bet_ledger WHERE status = 'PENDING'
+            """)
+            return cursor.fetchall()
+    except Exception as e:
+        print(f"[Database] Error fetching pending bets: {e}")
+        return []
+    finally:
+        conn.close()
+
+def update_bet_status(bet_id: int, status: str, pnl: float) -> bool:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE bet_ledger 
+                SET status = %s, pnl = %s 
+                WHERE id = %s
+            """, (status, pnl, bet_id))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"[Database] Error updating bet status: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def save_portfolio_snapshot(snapshot: PortfolioSnapshot) -> bool:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO portfolio_history (
+                    date, total_balance, daily_profit, roi_percentage, created_at
+                ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (date) DO UPDATE SET
+                    total_balance = EXCLUDED.total_balance,
+                    daily_profit = EXCLUDED.daily_profit,
+                    roi_percentage = EXCLUDED.roi_percentage,
+                    created_at = CURRENT_TIMESTAMP;
+            """, (snapshot.date, snapshot.total_balance, snapshot.daily_profit, snapshot.roi_percentage))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"[Database] Error saving portfolio snapshot: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def get_portfolio_history(limit: int = 30) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT * FROM portfolio_history 
+                ORDER BY date ASC 
+                LIMIT %s
+            """, (limit,))
+            return cursor.fetchall()
+    except Exception as e:
+        print(f"[Database] Error getting portfolio history: {e}")
+        return []
     finally:
         conn.close()

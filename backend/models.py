@@ -46,3 +46,23 @@ class PredictionGame(BaseModel):
 class DailyPredictionsPayload(BaseModel):
     meta: Dict[str, Any]
     games: List[PredictionGame]
+
+class BetLedger(BaseModel):
+    id: Optional[int] = None
+    prediction_id: Optional[str] = None # To link back to a specific game/prediction if needed
+    date: str # YYYY-MM-DD
+    match: str # "Lakers vs Warriors"
+    selection: str # "Home", "Away", "Over", "Under"
+    odds: float
+    stake_amount: float
+    status: str = Field(default="PENDING") # PENDING, WON, LOST, VOID
+    pnl: float = Field(default=0.0)
+    is_real_bet: bool = Field(default=False)
+    created_at: Optional[datetime] = None
+
+class PortfolioSnapshot(BaseModel):
+    date: str # YYYY-MM-DD
+    total_balance: float
+    daily_profit: float
+    roi_percentage: float
+    created_at: Optional[datetime] = None
