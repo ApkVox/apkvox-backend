@@ -15,7 +15,9 @@ from datetime import datetime
 from .timezone import get_current_timestamp, get_current_date, NBA_TIMEZONE
 
 from .predictor import get_prediction_service, NBAPredictionService
-from .database import init_db, get_history, get_stats
+from .database import init_db, get_history, get_stats, get_daily_cache
+from apscheduler.schedulers.background import BackgroundScheduler
+from backend.worker import run_daily_analysis
 
 # ============================================================
 # Lifespan events (startup/shutdown)
@@ -27,12 +29,31 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         print("[API] Database ready")
+        
+        # Initialize Autonomous Server (Scheduler)
+        scheduler = BackgroundScheduler()
+        # Schedule jobs (Bogota time matches User/Server roughly)
+        # Morning Analysis
+        scheduler.add_job(run_daily_analysis, 'cron', hour=8, minute=0, id='daily_morning_analysis')
+        # Evening Update (Pre-Game)
+        scheduler.add_job(run_daily_analysis, 'cron', hour=18, minute=0, id='daily_evening_update')
+        
+        scheduler.start()
+        print("[API] 🧠 Autonomous Server Online (Scheduled for 08:00 and 18:00)")
+        
+        # Optional: Run immediately on startup if cache missing? 
+        # Better to let user trigger or wait for schedule to avoid long startup.
+        
     except Exception as e:
-        print(f"[API] WARNING: Database initialization failed: {e}")
+        print(f"[API] WARNING: Database/Scheduler initialization failed: {e}")
         print("[API] Server will continue without database - some features may be unavailable")
     yield
     # Shutdown
     print("[API] Shutting down...")
+    try:
+        scheduler.shutdown()
+    except:
+        pass
 
 # ============================================================
 # FastAPI Application Setup
@@ -535,6 +556,38 @@ def optimize_strategy(request: StrategyRequest):
     try:
         # 1. Get today's predictions
         today_str = get_current_date().strftime("%Y-%m-%d")
+
+        # --- CACHE LAYER (Autonomous Server) ---
+        cached_data = get_daily_cache(today_str)
+        if cached_data and cached_data.get('strategy_json'):
+            print(f"⚡ [Main] Serving cached strategy for {today_str}")
+            strategy = cached_data['strategy_json']
+            
+            # Note: The cached strategy has 'bankroll_basis' (e.g. 10,000).
+            # We must Re-Scale the stake amounts to the User's requested bankroll.
+            # This is fast math, much cheaper than running the whole engine.
+            
+            user_bankroll = float(request.bankroll)
+            basis = float(strategy.get('bankroll_basis', 10000))
+            ratio = user_bankroll / basis
+            
+            # Deep copy to avoid mutating cache (if in-memory, though here it's new dict from DB)
+            response_bets = []
+            for bet in strategy.get('proposed_bets', []):
+                new_bet = bet.copy()
+                new_bet['stake_amount'] = round(bet['stake_amount'] * ratio, 2)
+                response_bets.append(new_bet)
+                
+            return {
+                "strategy": strategy.get('strategy'),
+                "bankroll_used": user_bankroll,
+                "proposed_bets": response_bets,
+                "risk_analysis": strategy.get('risk_analysis')
+            }
+        
+        print(f"💨 [Main] Cache miss for {today_str}. Running on-demand (and saving)...")
+        # ----------------------------------------
+
         # Ensure we are using the imported function, not database module directly
         raw_preds = get_history(limit=1, game_date=today_str) 
         
@@ -542,6 +595,10 @@ def optimize_strategy(request: StrategyRequest):
             try:
                 # Use the service getter
                 raw_preds = get_prediction_service().get_predictions_for_date(today_str)
+                # Save these new predictions to history so next time get_history finds them
+                if raw_preds:
+                     from .database import save_predictions
+                     save_predictions(raw_preds)
             except Exception as inner_e:
                 print(f"[Sniper] Error fetching fresh predictions: {inner_e}")
                 raw_preds = []
@@ -561,7 +618,7 @@ def optimize_strategy(request: StrategyRequest):
             print(f"[Sniper] Sentinel error: {e}")
             risk_advice = "Sentinel AI is taking a nap. (Error de conexión)"
 
-        return {
+        response = {
             "strategy": "Sniper (Edge > 15%, Odds > 1.60)",
             "bankroll_used": bankroll,
             "proposed_bets": bets_dicts,
@@ -571,8 +628,39 @@ def optimize_strategy(request: StrategyRequest):
                 "exposure_rating": "HIGH" if len(bets_dicts) > 5 else "MODERATE"
             }
         }
+        
+        # SELF-HEALING: Save this result to cache so the next user gets it fast
+        # (Even though this validly serves the current request, might as well cache it)
+        from .worker import run_daily_analysis
+        # We can't easily inject just the result into the worker's logic without duplicating save logic.
+        # But we can call save_daily_cache directly.
+        from .database import save_daily_cache
+        
+        # We need to normalize the payload for cache (basis = user bankroll)
+        cache_payload = response.copy()
+        cache_payload['bankroll_basis'] = bankroll
+        
+        save_daily_cache(
+            entry_date=today_str,
+            predictions=raw_preds, # We have these
+            strategy=cache_payload,
+            sentinel_msg=risk_advice
+        )
+        print(f"💾 [Main] On-demand result saved to cache.")
+        
+        return response
+
     except Exception as e:
         import traceback
         error_msg = f"Sniper Crash: {str(e)}\n{traceback.format_exc()}"
         print(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
+
+@app.post("/api/admin/refresh-daily", tags=["Admin"])
+def force_refresh(background_tasks: BackgroundTasks):
+    """
+    Manually trigger the Autonomous Worker to refresh today's data.
+    Returns immediately, work happens in background.
+    """
+    background_tasks.add_task(run_daily_analysis)
+    return {"status": "triggered", "message": "Autonomous Worker started in background"}

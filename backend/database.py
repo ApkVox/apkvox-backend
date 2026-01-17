@@ -102,6 +102,20 @@ def init_db():
                 );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_history_date ON portfolio_history(date DESC);")
+
+            # 5. Daily Cache (Autonomous Server)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_cache (
+                    id SERIAL PRIMARY KEY,
+                    cache_date DATE NOT NULL UNIQUE,
+                    predictions_json JSONB,
+                    strategy_json JSONB,
+                    sentinel_message TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_cache_date ON daily_cache(cache_date DESC);")
             
         conn.commit()
         print("[Database] Initialized PostgreSQL tables (predictions, ai_insights)")
@@ -547,5 +561,81 @@ def get_portfolio_history(limit: int = 30) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[Database] Error getting portfolio history: {e}")
         return []
+    finally:
+        conn.close()
+
+# ============================================================
+# Daily Cache (Autonomous Entity Layer)
+# ============================================================
+
+def get_daily_cache(entry_date: str) -> Optional[Dict[str, Any]]:
+    """
+    Get cached predictions and strategy for a specific date.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT * FROM daily_cache WHERE cache_date = %s
+            """, (entry_date,))
+            return cursor.fetchone()
+    except Exception as e:
+        print(f"[Database] Error getting daily cache: {e}")
+        return None
+    finally:
+        conn.close()
+
+def save_daily_cache(entry_date: str, predictions: Optional[List] = None, 
+                     strategy: Optional[Dict] = None, sentinel_msg: Optional[str] = None):
+    """
+    Upsert daily cache. Only updates provided fields.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check if exists
+            cursor.execute("SELECT id FROM daily_cache WHERE cache_date = %s", (entry_date,))
+            exists = cursor.fetchone()
+            
+            if not exists:
+                cursor.execute("""
+                    INSERT INTO daily_cache (cache_date, predictions_json, strategy_json, sentinel_message, created_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                """, (
+                    entry_date, 
+                    Json(predictions) if predictions is not None else None,
+                    Json(strategy) if strategy is not None else None,
+                    sentinel_msg
+                ))
+            else:
+                # Build dynamic update
+                updates = []
+                params = []
+                
+                if predictions is not None:
+                    updates.append("predictions_json = %s")
+                    params.append(Json(predictions))
+                
+                if strategy is not None:
+                    updates.append("strategy_json = %s")
+                    params.append(Json(strategy))
+                    
+                if sentinel_msg is not None:
+                    updates.append("sentinel_message = %s")
+                    params.append(sentinel_msg)
+                
+                if updates:
+                    updates.append("updated_at = CURRENT_TIMESTAMP")
+                    query = f"UPDATE daily_cache SET {', '.join(updates)} WHERE cache_date = %s"
+                    params.append(entry_date)
+                    cursor.execute(query, tuple(params))
+            
+            conn.commit()
+            return True
+            
+    except Exception as e:
+        print(f"[Database] Error saving daily cache: {e}")
+        conn.rollback()
+        return False
     finally:
         conn.close()
