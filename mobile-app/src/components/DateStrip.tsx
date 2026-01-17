@@ -5,7 +5,7 @@
  * Horizontal list of dates with pill styling.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { colors, spacing, borderRadius, typography, shadows } from '../constants/theme';
@@ -14,6 +14,10 @@ interface DateStripProps {
     selectedDate: string; // YYYY-MM-DD
     onSelectDate: (date: string) => void;
 }
+
+// Constants for scroll calculation
+const DATE_ITEM_WIDTH = 60 + 24; // minWidth + paddingHorizontal * 2
+const DATE_ITEM_GAP = 12; // spacing.md
 
 // Helpers - Use Intl.DateTimeFormat for accurate timezone conversion
 function formatDateKey(date: Date): string {
@@ -28,6 +32,7 @@ function formatDateKey(date: Date): string {
 
 export const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate }) => {
     const { t, i18n } = useTranslation();
+    const scrollViewRef = useRef<ScrollView>(null);
 
     // Generate dates (10 days total: 7 past, Today, 2 future)
     const dates = useMemo(() => {
@@ -63,15 +68,31 @@ export const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate
                 key: dateKey,
                 dayName,
                 dayNumber,
-                active: dateKey === selectedDate
+                active: dateKey === selectedDate,
+                index: i + 7 // Convert to 0-based index (today = 7)
             });
         }
         return result;
     }, [selectedDate, t, i18n.language]);
 
+    // Auto-scroll to today on mount
+    useEffect(() => {
+        // Today is at index 7 (after 7 past days)
+        const todayIndex = 7;
+        const scrollX = todayIndex * (DATE_ITEM_WIDTH + DATE_ITEM_GAP) - 100; // Center it a bit
+
+        // Small delay to ensure the ScrollView is rendered
+        const timer = setTimeout(() => {
+            scrollViewRef.current?.scrollTo({ x: Math.max(0, scrollX), animated: false });
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, []);
+
     return (
         <View style={styles.container}>
             <ScrollView
+                ref={scrollViewRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}

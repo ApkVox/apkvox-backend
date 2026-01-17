@@ -12,41 +12,13 @@ import { Prediction, PredictionsResponse, HealthResponse } from '../types';
 // ============================================================
 // API Base URL Configuration
 // ============================================================
-// IMPORTANT: For physical device testing, use your machine's LAN IP
-// Find your IP with: ipconfig (Windows) or ifconfig (Mac/Linux)
-// Change this IP to match your network when switching WiFi networks
+// Production URL - Render Cloud Server
+// No need for local IP detection anymore!
 
-import Constants from 'expo-constants';
-
-// ============================================================
-// API Base URL Configuration
-// ============================================================
-// Automatically detects the Metro bundler IP (your computer's IP)
-// This enables the app to connect without manual IP updates.
-// If testing on a DIFFERENT network (e.g. LTE), fill TUNNEL_URL below.
-const TUNNEL_URL = "";
+const API_BASE_URL = "https://apkvox-api.onrender.com";
 
 const getBaseUrl = (): string => {
-    // 0. Priority: Manual Tunnel (e.g. ngrok)
-    if (TUNNEL_URL) return TUNNEL_URL;
-
-    // 1. Try to get IP from Expo config (works in Expo Go)
-    const debuggerHost = Constants.expoConfig?.hostUri;
-
-    if (debuggerHost) {
-        // debuggerHost is "192.168.x.x:8081". We split to get just the IP.
-        const ip = debuggerHost.split(':')[0];
-        return `http://${ip}:8001`;
-    }
-
-    // 2. Fallback for production or if detection fails
-    // Use localhost (0.0.0.0) for Android Emulator / iOS Simulator
-    if (!Constants.isDevice) {
-        return 'http://0.0.0.0:8001';
-    }
-
-    // 3. PHYSICAL DEVICE FALLBACK
-    return 'http://192.168.18.9:8001';
+    return API_BASE_URL;
 };
 
 // ============================================================
