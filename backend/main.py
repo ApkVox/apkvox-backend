@@ -185,35 +185,92 @@ async def get_predictions(
                 if target_date < today:
                     from .database import get_history
                     from .audit import audit_predictions
+                    from .scores import fetch_scores_for_date
                     
                     # 1. Check if we have predictions in DB
-                    existing = get_history(limit=1, game_date=date)
+                    existing = get_history(limit=100, game_date=date)
                     
-                    if not existing:
-                        # AUTO-BACKFILL: Generate predictions retroactively
-                        print(f"[API] No predictions found for past date {date}. Generating retroactive predictions...")
-                        # This generates AND SAVES to DB
-                        service.get_upcoming_predictions(target_date=target_dt)
-                    
-                    # 2. Trigger Audit (Updates scores/winners)
-                    audit_stats = audit_predictions(target_dt)
-                    print(f"[API] Audit Triggered for {date}: {audit_stats}")
-                    
-                    # 3. Fetch Final Result
-                    history_records = get_history(limit=100, game_date=date)
-                    
-                    # Convert HistoryRecord dicts to PredictionResponse objects
-                    for rec in history_records:
-                        # Map field names from DB schema to API schema
-                        rec["timestamp"] = rec.get("created_at", "") or ""
-                        rec["start_time_utc"] = (rec.get("game_date") or "") + "T00:00:00Z"
-                        rec["winner_confidence"] = rec.get("confidence", 0) or 0
-                        rec["home_win_probability"] = rec.get("home_win_probability", 0) or 0
-                        rec["away_win_probability"] = rec.get("away_win_probability", 0) or 0
-                        rec["ou_confidence"] = rec.get("ou_confidence", 0) or 0
-                        rec["under_over_line"] = rec.get("under_over_line", 0) or 0
-                        rec["under_over_prediction"] = rec.get("under_over_prediction", "N/A") or "N/A"
-                        target_predictions.append(rec)
+                    if existing:
+                        # We have stored predictions - use them
+                        history_records = existing
+                        
+                        # Trigger Audit to update scores
+                        try:
+                            audit_stats = audit_predictions(target_dt)
+                            print(f"[API] Audit Triggered for {date}: {audit_stats}")
+                            # Re-fetch after audit to get updated scores
+                            history_records = get_history(limit=100, game_date=date)
+                        except Exception as audit_err:
+                            print(f"[API] Audit warning: {audit_err}")
+                        
+                        # Convert to API format
+                        for rec in history_records:
+                            rec["timestamp"] = rec.get("created_at", "") or ""
+                            rec["start_time_utc"] = (rec.get("game_date") or "") + "T00:00:00Z"
+                            rec["winner_confidence"] = rec.get("confidence", 0) or 0
+                            rec["home_win_probability"] = rec.get("home_win_probability", 0) or 0
+                            rec["away_win_probability"] = rec.get("away_win_probability", 0) or 0
+                            rec["ou_confidence"] = rec.get("ou_confidence", 0) or 0
+                            rec["under_over_line"] = rec.get("under_over_line", 0) or 0
+                            rec["under_over_prediction"] = rec.get("under_over_prediction", "N/A") or "N/A"
+                            target_predictions.append(rec)
+                    else:
+                        # No stored predictions - FALLBACK: Show schedule games with scores from CSV
+                        print(f"[API] No predictions in DB for {date}. Showing schedule fallback...")
+                        
+                        # Get scores/games from CSV schedule
+                        scores_data = fetch_scores_for_date(target_dt)
+                        
+                        if scores_data:
+                            for key, game_data in scores_data.items():
+                                # Key format is "HOME_ABBR:AWAY_ABBR"
+                                # We need to convert abbreviations back to full names
+                                from .audit import TEAM_MAP
+                                
+                                # Reverse lookup for team names
+                                abbr_to_name = {v: k for k, v in TEAM_MAP.items() if len(k) > 5}
+                                
+                                home_abbr = game_data.get("home_abbr", "")
+                                away_abbr = game_data.get("away_abbr", "")
+                                
+                                home_name = abbr_to_name.get(home_abbr, home_abbr)
+                                away_name = abbr_to_name.get(away_abbr, away_abbr)
+                                
+                                home_score = game_data.get("home_score", 0)
+                                away_score = game_data.get("away_score", 0)
+                                actual_winner = home_name if home_score > away_score else away_name
+                                
+                                fallback_pred = {
+                                    "home_team": home_name,
+                                    "away_team": away_name,
+                                    "predicted_winner": "N/A",  # No prediction available
+                                    "home_win_probability": 50.0,
+                                    "away_win_probability": 50.0,
+                                    "winner_confidence": 0.0,
+                                    "under_over_prediction": "N/A",
+                                    "under_over_line": 0.0,
+                                    "ou_confidence": 0.0,
+                                    "home_odds": 0,
+                                    "away_odds": 0,
+                                    "start_time_utc": f"{date}T00:00:00Z",
+                                    "timestamp": get_current_timestamp(),
+                                    "recommendation": "NO DATA",
+                                    "edge_percent": 0.0,
+                                    "ai_impact": {
+                                        "summary": "Sin predicción histórica disponible",
+                                        "impact_score": 0.0,
+                                        "key_factors": [],
+                                        "confidence": 0
+                                    },
+                                    "status": "FINAL",
+                                    "home_score": home_score,
+                                    "away_score": away_score,
+                                    "actual_winner": actual_winner,
+                                    "is_correct": None  # Can't calculate without prediction
+                                }
+                                target_predictions.append(fallback_pred)
+                        
+                        print(f"[API] Fallback returned {len(target_predictions)} games from schedule")
                         
                 else:
                     # Future/Today: Use Predictor Service
