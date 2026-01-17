@@ -24,8 +24,12 @@ from .database import init_db, get_history, get_stats
 async def lifespan(app: FastAPI):
     # Startup
     print("[API] Initializing database...")
-    init_db()
-    print("[API] Database ready")
+    try:
+        init_db()
+        print("[API] Database ready")
+    except Exception as e:
+        print(f"[API] WARNING: Database initialization failed: {e}")
+        print("[API] Server will continue without database - some features may be unavailable")
     yield
     # Shutdown
     print("[API] Shutting down...")

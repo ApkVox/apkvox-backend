@@ -19,6 +19,13 @@ load_dotenv()
 # Database URL from .env
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Fix common DATABASE_URL format issues (Render sometimes uses postgres:// instead of postgresql://)
+if DATABASE_URL:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    elif DATABASE_URL.startswith("psql://"):
+        DATABASE_URL = DATABASE_URL.replace("psql://", "postgresql://", 1)
+
 def get_connection():
     """Get database connection"""
     if not DATABASE_URL:
