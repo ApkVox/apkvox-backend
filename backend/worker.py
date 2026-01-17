@@ -104,7 +104,16 @@ def run_daily_analysis(force_date=None):
             save_daily_cache(
                 entry_date=target_date_str, 
                 predictions=[], 
-                strategy={"error": "No games found"}, 
+                strategy={
+                    "strategy": "Sniper (No Games)",
+                    "bankroll_basis": 10000,
+                    "proposed_bets": [],
+                    "risk_analysis": {
+                        "advisor": "Sentinel AI",
+                        "message": "No hay partidos programados para hoy.",
+                        "exposure_rating": "NONE"
+                    }
+                }, 
                 sentinel_msg="No games scheduled for today."
             )
             return
