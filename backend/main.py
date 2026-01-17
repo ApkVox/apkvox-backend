@@ -161,6 +161,7 @@ async def health_check():
 
 @app.get("/api/predictions", response_model=PredictionsListResponse, tags=["Predictions"])
 async def get_predictions(
+    background_tasks: BackgroundTasks,
     sportsbook: str = Query("fanduel", description="Sportsbook to fetch odds from"),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format to fetch past/future games"),
     days: int = Query(1, description="Number of days to fetch (1-3, default 1 for speed)", ge=1, le=3)
@@ -168,6 +169,9 @@ async def get_predictions(
     """
     Get predictions for a specific date. If no date is provided, defaults to today.
     Use 'days' parameter to fetch 1-3 days of predictions (default: 1 for fast response).
+    
+    AUTO-TRIGGER: If AI insights are missing ("Análisis pendiente" or "Sin datos"),
+    this endpoint queues a background analysis task for those teams.
     """
     try:
         service = get_prediction_service(sportsbook=sportsbook)
@@ -285,6 +289,31 @@ async def get_predictions(
         else:
             # Default: Use the 'days' parameter (default: 1 for speed)
             target_predictions = service.get_upcoming_predictions(days=days)
+
+        # --- AUTO-TRIGGER AI ANALYSIS ---
+        from .ai_worker import run_single_analysis
+        
+        teams_to_analyze = set()
+        
+        for p in target_predictions:
+            # Check if AI data is missing or pending
+            ai = p.get("ai_impact", {})
+            summary = ai.get("summary", "") if ai else ""
+            
+            # Criteria for re-analysis:
+            # 1. Summary contains "Análisis pendiente" (Pending)
+            # 2. Summary contains "Sin datos" (No Data)
+            # 3. Summary is empty
+            if not summary or "pendiente" in summary.lower() or "sin datos" in summary.lower():
+                home = p.get("home_team")
+                away = p.get("away_team")
+                if home: teams_to_analyze.add(home)
+                if away: teams_to_analyze.add(away)
+        
+        if teams_to_analyze:
+            print(f"[API] Triggering background AI analysis for {len(teams_to_analyze)} teams: {list(teams_to_analyze)}")
+            for team in teams_to_analyze:
+                background_tasks.add_task(run_single_analysis, team)
 
         return PredictionsListResponse(
             count=len(target_predictions),

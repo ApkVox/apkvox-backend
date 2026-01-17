@@ -171,34 +171,59 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({ prediction, onBack
                 {/* 6. AI News Analysis Section */}
                 {prediction.ai_impact && (
                     <View style={styles.aiNewsCard}>
-                        <View style={styles.aiNewsHeader}>
-                            <Text style={styles.aiNewsTitle}>{t('ai_news_title')}</Text>
-                            <View style={[styles.aiScoreBadge, { backgroundColor: prediction.ai_impact.impact_score > 0 ? '#E8F5E9' : (prediction.ai_impact.impact_score < 0 ? '#FFEBEE' : '#F5F5F5') }]}>
-                                <Text style={[styles.aiScoreText, { color: prediction.ai_impact.impact_score > 0 ? '#4CAF50' : (prediction.ai_impact.impact_score < 0 ? '#FF5252' : '#9E9E9E') }]}>
-                                    {prediction.ai_impact.impact_score > 0 ? '📈 ' : (prediction.ai_impact.impact_score < 0 ? '📉 ' : '')}
-                                    {Math.abs(prediction.ai_impact.impact_score).toFixed(1)}
-                                </Text>
-                            </View>
-                        </View>
+                        {(() => {
+                            // Check if analysis is pending or invalid
+                            const summary = prediction.ai_impact.summary || "";
+                            const isPending = summary.toLowerCase().includes("pendiente") || summary.toLowerCase().includes("sin datos") || summary === "";
 
-                        <Text style={styles.aiSummaryLabel}>{t('ai_summary')}</Text>
-                        <Text style={styles.aiSummaryText}>{prediction.ai_impact.summary}</Text>
-
-                        {prediction.ai_impact.key_factors && prediction.ai_impact.key_factors.length > 0 && (
-                            <View style={styles.aiFactorsContainer}>
-                                <Text style={styles.aiSummaryLabel}>{t('ai_factors')}</Text>
-                                {prediction.ai_impact.key_factors.map((factor, index) => (
-                                    <View key={index} style={styles.factorRow}>
-                                        <Text style={styles.factorBullet}>•</Text>
-                                        <Text style={styles.factorText}>{factor}</Text>
+                            if (isPending) {
+                                return (
+                                    <View style={styles.aiPendingContainer}>
+                                        <View style={styles.aiPendingHeader}>
+                                            <Text style={styles.aiNewsTitle}>{t('ai_news_title')}</Text>
+                                            <ActivityIndicator size="small" color={colors.primary} />
+                                        </View>
+                                        <Text style={styles.aiPendingText}>
+                                            {t('ai_investigating_message') || "AI Agent is investigating this matchup... Check back in a few seconds."}
+                                        </Text>
+                                        <View style={styles.aiPulseBar} />
                                     </View>
-                                ))}
-                            </View>
-                        )}
+                                );
+                            }
 
-                        <View style={styles.aiConfidenceRow}>
-                            <Text style={styles.aiConfLabel}>{t('confidence')}: {Math.round(prediction.ai_impact.confidence * 100)}%</Text>
-                        </View>
+                            return (
+                                <>
+                                    <View style={styles.aiNewsHeader}>
+                                        <Text style={styles.aiNewsTitle}>{t('ai_news_title')}</Text>
+                                        <View style={[styles.aiScoreBadge, { backgroundColor: prediction.ai_impact.impact_score > 0 ? '#E8F5E9' : (prediction.ai_impact.impact_score < 0 ? '#FFEBEE' : '#F5F5F5') }]}>
+                                            <Text style={[styles.aiScoreText, { color: prediction.ai_impact.impact_score > 0 ? '#4CAF50' : (prediction.ai_impact.impact_score < 0 ? '#FF5252' : '#9E9E9E') }]}>
+                                                {prediction.ai_impact.impact_score > 0 ? '📈 ' : (prediction.ai_impact.impact_score < 0 ? '📉 ' : '')}
+                                                {Math.abs(prediction.ai_impact.impact_score).toFixed(1)}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.aiSummaryLabel}>{t('ai_summary')}</Text>
+                                    <Text style={styles.aiSummaryText}>{prediction.ai_impact.summary}</Text>
+
+                                    {prediction.ai_impact.key_factors && prediction.ai_impact.key_factors.length > 0 && (
+                                        <View style={styles.aiFactorsContainer}>
+                                            <Text style={styles.aiSummaryLabel}>{t('ai_factors')}</Text>
+                                            {prediction.ai_impact.key_factors.map((factor, index) => (
+                                                <View key={index} style={styles.factorRow}>
+                                                    <Text style={styles.factorBullet}>•</Text>
+                                                    <Text style={styles.factorText}>{factor}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    <View style={styles.aiConfidenceRow}>
+                                        <Text style={styles.aiConfLabel}>{t('confidence')}: {Math.round(prediction.ai_impact.confidence * 100)}%</Text>
+                                    </View>
+                                </>
+                            );
+                        })()}
                     </View>
                 )}
 
@@ -524,6 +549,32 @@ const styles = StyleSheet.create({
         color: colors.textLight,
         fontWeight: '700',
         fontStyle: 'italic',
+    },
+
+    // AI Pending State
+    aiPendingContainer: {
+        alignItems: 'center',
+        paddingVertical: spacing.sm,
+    },
+    aiPendingHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: spacing.sm,
+    },
+    aiPendingText: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        fontStyle: 'italic',
+        marginBottom: spacing.md,
+    },
+    aiPulseBar: {
+        width: '100%',
+        height: 4,
+        backgroundColor: colors.primary + '20', // Opacity 20%
+        borderRadius: 2,
+        overflow: 'hidden',
     },
 });
 

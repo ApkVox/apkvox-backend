@@ -75,19 +75,36 @@ export const DateStrip: React.FC<DateStripProps> = ({ selectedDate, onSelectDate
         return result;
     }, [selectedDate, t, i18n.language]);
 
-    // Auto-scroll to today on mount
+    // Auto-scroll to selected date whenever it changes
     useEffect(() => {
-        // Today is at index 7 (after 7 past days)
-        const todayIndex = 7;
-        const scrollX = todayIndex * (DATE_ITEM_WIDTH + DATE_ITEM_GAP) - 100; // Center it a bit
+        // Find the index of the selected date
+        const selectedIndex = dates.findIndex(d => d.key === selectedDate);
 
-        // Small delay to ensure the ScrollView is rendered
-        const timer = setTimeout(() => {
-            scrollViewRef.current?.scrollTo({ x: Math.max(0, scrollX), animated: false });
-        }, 100);
+        if (selectedIndex !== -1 && scrollViewRef.current) {
+            // Calculate position to center the item
+            // Center = (ItemPos) - (ScreenHalf) + (ItemHalf)
+            // But simplified: Index * (Width + Gap) - Offset to center
 
-        return () => clearTimeout(timer);
-    }, []);
+            // Assume screen width approx 360-400, center is ~180-200.
+            // Item width is ~84. 
+            // We want the item's center to be at the screen's center.
+            // ScrollX = (Index * TotalItemWidth) - (ScreenWidth/2) + (TotalItemWidth/2)
+            // Since we don't know exact screen width here easily without Dimensions, 
+            // we can approximate or use a simple centering logic that works "good enough".
+            // The previous logic used a fixed offset of 100 which is roughly half screen.
+
+            const itemWidth = DATE_ITEM_WIDTH + DATE_ITEM_GAP;
+            const scrollX = (selectedIndex * itemWidth) - 130; // 130 is approx half of screen width minus half item width
+
+            // Small delay to ensure the ScrollView is rendered/layout updated
+            setTimeout(() => {
+                scrollViewRef.current?.scrollTo({
+                    x: Math.max(0, scrollX),
+                    animated: true
+                });
+            }, 100);
+        }
+    }, [selectedDate, dates]);
 
     return (
         <View style={styles.container}>
