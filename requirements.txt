@@ -1,24 +1,24 @@
 # Web Framework
-fastapi
-uvicorn
-pydantic
-python-dotenv
+fastapi==0.128.0
+uvicorn==0.40.0
+pydantic==2.12.5
+python-dotenv==1.2.1
 
 # Database
-psycopg2-binary
+psycopg2-binary==2.9.11
 # asyncpg # Optional: if you plan to move to async DB access later
 
 # Machine Learning & Data
-numpy
-pandas
-xgboost
-scikit-learn
-joblib
+numpy==2.4.1
+pandas==2.3.3
+xgboost==3.1.3
+scikit-learn==1.8.0
+joblib==1.5.3
 
 # AI & Research
-groq
-duckduckgo-search
+groq==1.0.0
+duckduckgo-search==8.1.1
 
 # Utilities
-requests
-sbrscrape
+requests==2.32.5
+sbrscrape==0.0.10

@@ -123,8 +123,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
 
             {/* Content */}
             {loading && !refreshing ? (
-                <View style={styles.centerContainer}>
-                    <ActivityIndicator color={colors.primary} size="large" />
+                <View style={styles.listContent}>
+                    {[1, 2, 3].map((key) => <SkeletonCard key={key} />)}
                 </View>
             ) : (
                 <FlatList
@@ -157,6 +157,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onGameSelect, onSettings
 };
 
 // ... existing styles and NavItem ...
+
+const SkeletonCard = () => (
+    <View style={[styles.skeletonCard, shadows.card]}>
+        <View style={styles.skeletonHeader} />
+        <View style={styles.skeletonRow}>
+            <View style={styles.skeletonTeam} />
+            <View style={styles.skeletonScore} />
+            <View style={styles.skeletonTeam} />
+        </View>
+        <View style={styles.skeletonFooter} />
+    </View>
+);
 
 const NavItem = ({ icon, label, active }: { icon: string, label: string, active?: boolean }) => (
     <View style={styles.navItem}>
@@ -268,6 +280,52 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
         color: colors.textLight,
+    },
+    // Skeleton Styles
+    skeletonCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        marginHorizontal: spacing.lg,
+        marginBottom: spacing.md,
+        height: 140,
+        borderWidth: 1,
+        borderColor: colors.border,
+        opacity: 0.7,
+    },
+    skeletonHeader: {
+        width: '40%',
+        height: 12,
+        backgroundColor: '#E0E0E0',
+        alignSelf: 'center',
+        borderRadius: 6,
+        marginBottom: spacing.lg,
+    },
+    skeletonRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: spacing.sm,
+    },
+    skeletonTeam: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#E0E0E0',
+    },
+    skeletonScore: {
+        width: 80,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#E0E0E0',
+    },
+    skeletonFooter: {
+        marginTop: spacing.lg,
+        width: '100%',
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: '#E0E0E0',
+        opacity: 0.5,
     },
 });
 

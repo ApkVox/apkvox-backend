@@ -114,14 +114,48 @@ def save_predictions(predictions: List[Dict[str, Any]]) -> int:
 
     conn = get_connection()
     try:
+        # Validate and Normalize Data BEFORE saving
+        # This prevents "garbage in" that crashes the API on read
+        validated_predictions = []
+        for pred in predictions:
+            validated_pred = {
+                "home_team": pred.get("home_team", "Unknown"),
+                "away_team": pred.get("away_team", "Unknown"),
+                "predicted_winner": pred.get("predicted_winner", "N/A"),
+                "home_win_probability": pred.get("home_win_probability", 50.0),
+                "away_win_probability": pred.get("away_win_probability", 50.0),
+                "winner_confidence": pred.get("winner_confidence", 0.0),
+                "under_over_prediction": pred.get("under_over_prediction", "N/A"),
+                "under_over_line": pred.get("under_over_line", 0.0),
+                "ou_confidence": pred.get("ou_confidence", 0.0),
+                "home_odds": pred.get("home_odds", 0),
+                "away_odds": pred.get("away_odds", 0),
+                "start_time_utc": pred.get("start_time_utc", f"{prediction_date}T00:00:00Z"),
+                "timestamp": pred.get("timestamp", timestamp),
+                "recommendation": pred.get("recommendation", "NO DATA"),
+                "edge_percent": pred.get("edge_percent", 0.0),
+                "status": pred.get("status", "SCHEDULED"),
+                "home_score": pred.get("home_score", 0),
+                "away_score": pred.get("away_score", 0),
+                "actual_winner": pred.get("actual_winner", "N/A"),
+                "is_correct": pred.get("is_correct", None),
+                "ai_impact": pred.get("ai_impact", {
+                    "summary": "Sin análisis",
+                    "impact_score": 0.0,
+                    "key_factors": [],
+                    "confidence": 0
+                })
+            }
+            validated_predictions.append(validated_pred)
+
         with conn.cursor() as cursor:
             # Prepare payload
             payload = {
                 "meta": {
-                    "count": len(predictions),
+                    "count": len(validated_predictions),
                     "generated_at": timestamp
                 },
-                "games": predictions
+                "games": validated_predictions
             }
             
             cursor.execute("""
@@ -134,8 +168,8 @@ def save_predictions(predictions: List[Dict[str, Any]]) -> int:
             """, (prediction_date, Json(payload)))
             
         conn.commit()
-        print(f"[Database] Saved {len(predictions)} predictions for {prediction_date}")
-        return len(predictions)
+        print(f"[Database] Saved {len(validated_predictions)} predictions for {prediction_date}")
+        return len(validated_predictions)
     except Exception as e:
         print(f"[Database] Error saving predictions: {e}")
         conn.rollback()

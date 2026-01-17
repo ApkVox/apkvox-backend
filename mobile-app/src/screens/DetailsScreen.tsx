@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Share, Alert, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Share, Alert, Image, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';

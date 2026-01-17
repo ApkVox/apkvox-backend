@@ -26,29 +26,36 @@ class SportsInvestigator:
         self.groq_client = Groq(api_key=api_key)
         
     def search_news(self, query: str) -> str:
-        """Search for news using DuckDuckGo."""
+        """Search for news using DuckDuckGo with retries."""
         print(f"🔎 Buscando noticias sobre: {query}...")
-        try:
-            with DDGS() as ddgs:
-                # Search specifically for news in the last day (d=1)
-                # Note: 'timelimit' parameter might be 'd' for day in some versions, check docs if fails.
-                # Using 'd' for past day.
-                results = list(ddgs.news(query, region="wt-wt", safesearch="off", timelimit="d", max_results=5))
-                
-            if not results:
-                return "No se encontraron noticias recientes relevantes en las últimas 24h."
-                
-            context = ""
-            for r in results:
-                # Handle variations in DDG response keys if needed, usually 'date', 'title', 'body'
-                date = r.get('date', 'Unknown Date')
-                title = r.get('title', 'No Title')
-                body = r.get('body', 'No Content')
-                context += f"- [{date}] {title}: {body}\n"
+        results = []
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                with DDGS() as ddgs:
+                    # Search specifically for news in the last day (d=1)
+                    # Note: 'timelimit' parameter might be 'd' for day or 'w' for week.
+                    results = list(ddgs.news(query, region="wt-wt", safesearch="off", timelimit="d", max_results=5))
+                    if results:
+                        break # Success
+            except Exception as e:
+                print(f"⚠️ Intento {attempt+1}/{max_retries} fallido: {e}")
+                import time
+                time.sleep(1) # Wait before retry
+
+        if not results:
+            return "No se encontraron noticias recientes relevantes en las últimas 24h o hubo un error de conexión."
             
-            return context
-        except Exception as e:
-            return f"Error en la búsqueda: {str(e)}"
+        context = ""
+        for r in results:
+            # Handle variations in DDG response keys
+            date = r.get('date', 'Unknown Date')
+            title = r.get('title', 'No Title')
+            body = r.get('body', 'No Content')
+            context += f"- [{date}] {title}: {body}\n"
+        
+        return context
 
     def analyze_impact(self, news_context: str, team_name: str) -> dict:
         """Analyze impact using Groq LLM with JSON mode."""
