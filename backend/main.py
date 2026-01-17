@@ -424,9 +424,16 @@ async def analyze_team(team_name: str, background_tasks: BackgroundTasks):
     Call /api/predictions after a few seconds to see updated ai_impact.
     """
     from .ai_worker import run_single_analysis
+    from .predictor import reset_service
+    
+    def analyze_and_reset(team: str):
+        """Run analysis and then reset service cache"""
+        run_single_analysis(team)
+        reset_service()  # Force predictions to regenerate with new AI insights
+        print(f"[API] Analysis complete and cache reset for {team}")
     
     # Run analysis in background (non-blocking)
-    background_tasks.add_task(run_single_analysis, team_name)
+    background_tasks.add_task(analyze_and_reset, team_name)
     
     return AnalyzeResponse(
         status="analyzing",
@@ -442,8 +449,15 @@ async def analyze_all_teams(background_tasks: BackgroundTasks):
     This is the same as running: python -m backend.ai_worker
     """
     from .ai_worker import run_daily_analysis
+    from .predictor import reset_service
     
-    background_tasks.add_task(run_daily_analysis)
+    def analyze_all_and_reset():
+        """Run daily analysis and then reset service cache"""
+        run_daily_analysis()
+        reset_service()  # Force predictions to regenerate with new AI insights
+        print("[API] Daily analysis complete and cache reset")
+    
+    background_tasks.add_task(analyze_all_and_reset)
     
     return {
         "status": "analyzing",
