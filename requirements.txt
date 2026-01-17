@@ -21,3 +21,4 @@ duckduckgo-search
 
 # Utilities
 requests
+colorama
