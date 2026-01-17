@@ -36,17 +36,17 @@ const getBaseUrl = (): string => {
     if (debuggerHost) {
         // debuggerHost is "192.168.x.x:8081". We split to get just the IP.
         const ip = debuggerHost.split(':')[0];
-        return `http://${ip}:8000`;
+        return `http://${ip}:8001`;
     }
 
     // 2. Fallback for production or if detection fails
     // Use localhost (0.0.0.0) for Android Emulator / iOS Simulator
     if (!Constants.isDevice) {
-        return 'http://0.0.0.0:8000';
+        return 'http://0.0.0.0:8001';
     }
 
     // 3. PHYSICAL DEVICE FALLBACK
-    return 'http://192.168.18.9:8000';
+    return 'http://192.168.18.9:8001';
 };
 
 // ============================================================

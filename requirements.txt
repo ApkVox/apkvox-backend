@@ -1,4 +1,23 @@
+# Web Framework
+fastapi
+uvicorn
+pydantic
+python-dotenv
+
+# Database
+psycopg2-binary
+# asyncpg # Optional: if you plan to move to async DB access later
+
+# Machine Learning & Data
+numpy
+pandas
+xgboost
+scikit-learn
+joblib
+
+# AI & Research
 groq
 duckduckgo-search
-python-dotenv
-pydantic
+
+# Utilities
+requests
