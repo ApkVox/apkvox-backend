@@ -17,7 +17,7 @@ MIN_EDGE = 0.15        # 15% Edge required
 MIN_ODDS = 1.60        # Minimum odds (decimal)
 MAX_STAKE_PERCENT = 0.05 # Max 5% of bankroll per bet
 
-def calculate_kelly_bet(bankroll: float, win_prob: float, odds: float) -> float:
+def calculate_kelly_bet(win_prob: float, odds: float, bankroll: float, kelly_fraction: float = KELLY_FRACTION) -> float:
     """
     Calculates the optimal bet size using the Kelly Criterion.
     
@@ -40,7 +40,7 @@ def calculate_kelly_bet(bankroll: float, win_prob: float, odds: float) -> float:
         return 0.0
         
     # Apply safety fraction (Kelly Fraction)
-    safe_fraction = f_star * KELLY_FRACTION
+    safe_fraction = f_star * kelly_fraction
     
     # Calculate amount
     stake = bankroll * safe_fraction
@@ -80,7 +80,7 @@ def optimize_portfolio(predictions: List[Dict[str, Any]], bankroll: float) -> Li
         is_sniper, edge = sniper_check(home_prob, home_odds)
         
         if is_sniper:
-            stake = calculate_kelly_bet(bankroll, home_prob, home_odds)
+            stake = calculate_kelly_bet(home_prob, home_odds, bankroll)
             if stake > 0:
                 bet = BetLedger(
                     prediction_id=pred.get('game_id', f"{pred.get('home_team')} vs {pred.get('away_team')}"),
@@ -101,7 +101,7 @@ def optimize_portfolio(predictions: List[Dict[str, Any]], bankroll: float) -> Li
         is_sniper_a, edge_a = sniper_check(away_prob, away_odds)
         
         if is_sniper_a:
-            stake = calculate_kelly_bet(bankroll, away_prob, away_odds)
+            stake = calculate_kelly_bet(away_prob, away_odds, bankroll)
             if stake > 0:
                 bet = BetLedger(
                     prediction_id=pred.get('game_id', f"{pred.get('home_team')} vs {pred.get('away_team')}"),

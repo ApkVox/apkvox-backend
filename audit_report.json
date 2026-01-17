@@ -1,0 +1,258 @@
+{
+  "summary": {
+    "passed": 26,
+    "warnings": 4,
+    "failed": 1
+  },
+  "findings": [
+    {
+      "category": "Database",
+      "test": "Connection Test",
+      "status": "PASS",
+      "details": "Successfully connected to PostgreSQL",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:12.063505"
+    },
+    {
+      "category": "Database",
+      "test": "Init DB",
+      "status": "PASS",
+      "details": "Schema initialization completed",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:13.799658"
+    },
+    {
+      "category": "Database",
+      "test": "Save Predictions",
+      "status": "PASS",
+      "details": "Saved 1 test prediction",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:14.689461"
+    },
+    {
+      "category": "Database",
+      "test": "Invalid Prediction Handling",
+      "status": "PASS",
+      "details": "Correctly rejected incomplete data",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:15.326836"
+    },
+    {
+      "category": "Database",
+      "test": "Get History",
+      "status": "PASS",
+      "details": "Retrieved 1 records",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:16.138814"
+    },
+    {
+      "category": "Database",
+      "test": "AI Insights CRUD",
+      "status": "PASS",
+      "details": "Save and retrieve working",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:17.606940"
+    },
+    {
+      "category": "Database",
+      "test": "Daily Cache CRUD",
+      "status": "PASS",
+      "details": "Cache save/retrieve working",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:19.184326"
+    },
+    {
+      "category": "Database",
+      "test": "Stats Query",
+      "status": "PASS",
+      "details": "Stats: {'total_predictions': 1, 'completed_games': 0, 'correct_predictions': 0, 'win_rate': 0.0, 'pending_games': 0}",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:19.865545"
+    },
+    {
+      "category": "Predictor",
+      "test": "Model Loading",
+      "status": "PASS",
+      "details": "Models already loaded (cached)",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:28.237665"
+    },
+    {
+      "category": "Predictor",
+      "test": "Schedule Loading",
+      "status": "PASS",
+      "details": "Loaded 1306 scheduled games",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:28.271391"
+    },
+    {
+      "category": "Predictor",
+      "test": "Today's Games",
+      "status": "PASS",
+      "details": "Found 9 games for today",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:28.280375"
+    },
+    {
+      "category": "Predictor",
+      "test": "Stats Caching",
+      "status": "PASS",
+      "details": "Cache working (1st: 1.79s, 2nd: 0.00s)",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:30.072745"
+    },
+    {
+      "category": "Predictor",
+      "test": "Prediction Structure",
+      "status": "PASS",
+      "details": "Got 9 predictions with valid structure",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:52.424000"
+    },
+    {
+      "category": "AI",
+      "test": "GROQ_API_KEY",
+      "status": "PASS",
+      "details": "Key present (length: 56)",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:52.429662"
+    },
+    {
+      "category": "AI",
+      "test": "SportsInvestigator Import",
+      "status": "PASS",
+      "details": "Module imported successfully",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:52.430143"
+    },
+    {
+      "category": "AI",
+      "test": "News Search",
+      "status": "PASS",
+      "details": "Retrieved 1474 chars of news context",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:55.466015"
+    },
+    {
+      "category": "AI",
+      "test": "Impact Analysis",
+      "status": "PASS",
+      "details": "LLM analysis working (impact: -8)",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:57.210853"
+    },
+    {
+      "category": "AI",
+      "test": "Sentinel Risk Analysis",
+      "status": "PASS",
+      "details": "Advice received: Exposici\u00f3n del 5%. Dentro de l\u00edmites seguros. Sin advertencias....",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:58.824007"
+    },
+    {
+      "category": "Finance",
+      "test": "Kelly Criterion Normal",
+      "status": "WARN",
+      "details": "Stake $500.00 seems off",
+      "severity": "MEDIUM",
+      "timestamp": "2026-01-17T15:46:58.835525"
+    },
+    {
+      "category": "Finance",
+      "test": "Kelly Edge Cases",
+      "status": "PASS",
+      "details": "All edge cases handled correctly",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:58.837539"
+    },
+    {
+      "category": "Finance",
+      "test": "Sniper Check",
+      "status": "WARN",
+      "details": "Filter may be misconfigured: (True, 0.1594594594594595), (False, 0.08571428571428574), (False, -0.005555555555555536)",
+      "severity": "MEDIUM",
+      "timestamp": "2026-01-17T15:46:58.838477"
+    },
+    {
+      "category": "Finance",
+      "test": "Portfolio Optimization",
+      "status": "PASS",
+      "details": "Generated 1 proposed bets",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:46:58.839925"
+    },
+    {
+      "category": "Worker",
+      "test": "AI Investigation Batch",
+      "status": "PASS",
+      "details": "Batch investigation completed without crash",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:04.629834"
+    },
+    {
+      "category": "Worker",
+      "test": "Daily Analysis Function",
+      "status": "PASS",
+      "details": "Function exists and is importable",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:04.630401"
+    },
+    {
+      "category": "API",
+      "test": "Health Endpoint",
+      "status": "PASS",
+      "details": "Response: {'status': 'ok', 'model': 'XGBoost', 'version': '1.1.0', 'timestamp': '2026-01-17T15:47:04.695480-05:00'}",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:04.717288"
+    },
+    {
+      "category": "API",
+      "test": "Predictions Endpoint",
+      "status": "PASS",
+      "details": "Got 9 predictions",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:26.199761"
+    },
+    {
+      "category": "API",
+      "test": "Strategy Optimize",
+      "status": "PASS",
+      "details": "Response structure valid, 1 bets",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:27.477376"
+    },
+    {
+      "category": "API",
+      "test": "Strategy Zero Bankroll",
+      "status": "WARN",
+      "details": "Accepted zero bankroll - may produce weird results",
+      "severity": "LOW",
+      "timestamp": "2026-01-17T15:47:28.254338"
+    },
+    {
+      "category": "API",
+      "test": "Admin Refresh",
+      "status": "FAIL",
+      "details": "Status: 404",
+      "severity": "MEDIUM",
+      "timestamp": "2026-01-17T15:47:28.274082"
+    },
+    {
+      "category": "Security",
+      "test": "Hardcoded Secret in ai_researcher.py",
+      "status": "WARN",
+      "details": "Pattern 'api_key=' found",
+      "severity": "HIGH",
+      "timestamp": "2026-01-17T15:47:28.292778"
+    },
+    {
+      "category": "Config",
+      "test": "Mobile API URL",
+      "status": "PASS",
+      "details": "Production URL configured",
+      "severity": "INFO",
+      "timestamp": "2026-01-17T15:47:28.296939"
+    }
+  ],
+  "timestamp": "2026-01-17T15:47:28.315566"
+}

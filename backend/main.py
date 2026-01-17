@@ -553,6 +553,12 @@ def optimize_strategy(request: StrategyRequest):
       - Kelly Stake Sizes
       - Sentinel Probable Risk Analysis (AI Text)
     """
+    # Validate bankroll
+    if request.bankroll <= 0:
+        raise HTTPException(status_code=400, detail="Bankroll must be greater than 0")
+    if request.bankroll > 10000000:
+        raise HTTPException(status_code=400, detail="Bankroll exceeds maximum allowed value")
+    
     try:
         # 1. Get today's predictions
         today_str = get_current_date().strftime("%Y-%m-%d")
