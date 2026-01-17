@@ -81,10 +81,13 @@ def init_db():
         conn.close()
 
 
+from .models import PredictionGame, DailyPredictionsPayload
+
 def save_predictions(predictions: List[Dict[str, Any]]) -> int:
     """
     Save predictions for a SINGLE DAY as one JSONB payload row.
     If row exists for that date, it updates the payload (UPSERT).
+    Uses Pydantic models for strict validation.
     """
     if not predictions:
         return 0
@@ -114,48 +117,30 @@ def save_predictions(predictions: List[Dict[str, Any]]) -> int:
 
     conn = get_connection()
     try:
-        # Validate and Normalize Data BEFORE saving
-        # This prevents "garbage in" that crashes the API on read
-        validated_predictions = []
+        # Validate and Normalize Data using Pydantic Models
+        # This is the "SQLModel/Pydantic" migration step requested
+        validated_games = []
         for pred in predictions:
-            validated_pred = {
-                "home_team": pred.get("home_team", "Unknown"),
-                "away_team": pred.get("away_team", "Unknown"),
-                "predicted_winner": pred.get("predicted_winner", "N/A"),
-                "home_win_probability": pred.get("home_win_probability", 50.0),
-                "away_win_probability": pred.get("away_win_probability", 50.0),
-                "winner_confidence": pred.get("winner_confidence", 0.0),
-                "under_over_prediction": pred.get("under_over_prediction", "N/A"),
-                "under_over_line": pred.get("under_over_line", 0.0),
-                "ou_confidence": pred.get("ou_confidence", 0.0),
-                "home_odds": pred.get("home_odds", 0),
-                "away_odds": pred.get("away_odds", 0),
-                "start_time_utc": pred.get("start_time_utc", f"{prediction_date}T00:00:00Z"),
-                "timestamp": pred.get("timestamp", timestamp),
-                "recommendation": pred.get("recommendation", "NO DATA"),
-                "edge_percent": pred.get("edge_percent", 0.0),
-                "status": pred.get("status", "SCHEDULED"),
-                "home_score": pred.get("home_score", 0),
-                "away_score": pred.get("away_score", 0),
-                "actual_winner": pred.get("actual_winner", "N/A"),
-                "is_correct": pred.get("is_correct", None),
-                "ai_impact": pred.get("ai_impact", {
-                    "summary": "Sin análisis",
-                    "impact_score": 0.0,
-                    "key_factors": [],
-                    "confidence": 0
-                })
-            }
-            validated_predictions.append(validated_pred)
+            try:
+                # This throws ValidationError if crucial fields miss, or auto-fills defaults
+                model = PredictionGame(**pred)
+                validated_games.append(model.model_dump())
+            except Exception as ve:
+                print(f"[Database] Validation Warning for a game: {ve}. Skipping.")
+                continue
+
+        if not validated_games:
+            print("[Database] No valid games to save after validation.")
+            return 0
 
         with conn.cursor() as cursor:
             # Prepare payload
             payload = {
                 "meta": {
-                    "count": len(validated_predictions),
+                    "count": len(validated_games),
                     "generated_at": timestamp
                 },
-                "games": validated_predictions
+                "games": validated_games
             }
             
             cursor.execute("""
@@ -168,8 +153,8 @@ def save_predictions(predictions: List[Dict[str, Any]]) -> int:
             """, (prediction_date, Json(payload)))
             
         conn.commit()
-        print(f"[Database] Saved {len(validated_predictions)} predictions for {prediction_date}")
-        return len(validated_predictions)
+        print(f"[Database] Saved {len(validated_games)} predictions for {prediction_date}")
+        return len(validated_games)
     except Exception as e:
         print(f"[Database] Error saving predictions: {e}")
         conn.rollback()
